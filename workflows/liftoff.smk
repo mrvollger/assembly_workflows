@@ -43,13 +43,13 @@ if("ref" in config):
     assert os.path.isabs(REF), f"Must specify absolute path for {REF}"
     assert os.path.exists(REF), f"Index must exist. Try: samtools faidx {REF}"
 else:
-    REF = 'Liftoff/ref/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna'
+    REF = 'Liftoff/tmp/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna'
 
 if("gff" in config):
     GFF = config["gff"]
     assert os.path.isabs(GFF), f"Must specify absolute path for {GFF}"
 else:
-	GFF = 'Liftoff/ref/gencode.v34.primary_assembly.annotation.gff3',
+	GFF = 'Liftoff/tmp/gencode.v34.primary_assembly.annotation.gff3',
 
 if("regions" in config):
     RGN = config["regions"]
@@ -96,7 +96,7 @@ rule subset_gff:
     input:
         gff = rules.get_gff.output.gff,
     output:
-        gff = temp("Liftoff/ref/{SM}.subset.gff"),
+        gff = temp("Liftoff/tmp/{SM}.subset.gff"),
     threads: 1
     resources:
         mem=8
@@ -104,7 +104,7 @@ rule subset_gff:
         if("regions" in config):
             shell("bedtools intersect -wa -a {input.gff} -b {RGN} > {output.gff} ")
         else:
-            shell("ln -s {input.gff} {output.gff}")
+            shell("ln -s $(readlink -f {input.gff}) $(readlink -f {output.gff}) ")
 
 
 #################################################################3

@@ -13,8 +13,7 @@ SDIR=os.path.dirname(workflow.snakefile)
 CWD=os.getcwd()
 shell.prefix(f"source {SDIR}/env.cfg ; set -eo pipefail; ")
 
-workdir: "test_subflow"
-
+workdir: "Assembly_analysis"
 
 include: "liftoff.smk"
 include: "mask.smk"

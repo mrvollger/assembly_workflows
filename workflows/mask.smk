@@ -174,10 +174,19 @@ rule DupMaskerRM:
 		mem=8,
 	threads: THREADS
 	shell:"""
-{SDIR}/bin/DupMaskerParallel \
+DupMaskerParallel \
 	-pa {threads} -dupout \
 	-engine ncbi \
 	{input.fasta}
+"""
+"""
+if [ -f "{output.dupout}" ]; then
+    echo "exists"
+else 
+    echo "No repeats found, touching output"
+	cp {input.fasta} {output.msk}
+fi
+"
 """
 
 rule RunDupMasker:
@@ -191,7 +200,7 @@ rule RunDupMasker:
 		mem=8,
 	threads:1
 	shell:"""
-{SDIR}/bin/DupMaskerParallel \
+DupMaskerParallel \
 	-engine ncbi \
 	{input.fasta}
 """

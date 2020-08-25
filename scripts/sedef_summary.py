@@ -21,7 +21,7 @@ def acrofilt(rec):
     return(cond)
 
 def pairfilt(rec, chrm, other):
-    cond = (rec[chr1] in chrm) and (rec[chr2] in other)
+    cond = (rec[chr1] == chrm) and (rec[chr2] == other)
     return(cond)
 
 def intra(rec):
@@ -78,6 +78,15 @@ def make_cen(rmf):
         elif(CEN[rec.chrom][1] - CEN[rec.chrom][0] < rec.end - rec.start):
             CEN[rec.chrom]=(rec.start, rec.end)
 
+def read_cen(cenf):
+    global CEN
+    cen = BedTool(cenf)
+    CEN={}
+    for rec in cen:
+        if(rec.chrom not in CEN):
+            CEN[rec.chrom]=(rec.start, rec.end)
+        elif(CEN[rec.chrom][1] - CEN[rec.chrom][0] < rec.end - rec.start):
+            CEN[rec.chrom]=(rec.start, rec.end)
 
 
 def unique(sequence):
@@ -86,18 +95,17 @@ def unique(sequence):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("sedef", help="positional input")
+    parser.add_argument("sedef", help="positional input, sedef outputs")
     parser.add_argument("-x", "--excel", help="place to write excel", default=None)
     parser.add_argument("-r", "--rm", help="RepeatMasker Bed", default=None)
+    parser.add_argument("--cen", help="File with cen locations, Bed", default=None)
     parser.add_argument("-n", "--number", help="numeric option", type=int, default=5)
-    parser.add_argument("-l", "--list", nargs="*", help="list with zero or more entries")
-    parser.add_argument("-l2", "--list2", nargs="+", help="list one or more entries")
     parser.add_argument('-d', help="store args.d as true if -d",  action="store_true", default=False)
     args = parser.parse_args()
     
     # make a cen track so I can get p and q arms
-    if(args.rm):
-       make_cen(args.rm)
+    if(args.cen):
+       read_cen(args.cen)
 
     # readin file and make headers global varables so we can acess them
     header = open(args.sedef).readline().strip("#").split()
@@ -111,7 +119,7 @@ if __name__ == "__main__":
     #
     # column names for the table
     #
-    columns = pd.MultiIndex.from_product([['non-redundant', 'redundant'], ['total', 'inter', 'intra'], ['bp','total']])
+    columns = pd.MultiIndex.from_product([['non-redundant', 'redundant'], ['total', 'intra', 'inter'], ['bp','count']])
     
     #
     # 
@@ -155,9 +163,9 @@ if __name__ == "__main__":
     #
     if(args.excel):
         with pd.ExcelWriter(args.excel) as writer:  
-            chrtbl.to_excel(writer, sheet_name='Chromosomes')
-            acrotbl.to_excel(writer, sheet_name='Acrocentric')
-            pairtbl.to_excel(writer, sheet_name='PairedChromosomes')
+            chrtbl.to_excel(writer, sheet_name='Chromosomes', float_format="{:,}")
+            acrotbl.to_excel(writer, sheet_name='Acrocentric', float_format="{:,}")
+            pairtbl.to_excel(writer, sheet_name='PairedChromosomes', float_format="{:,}")
 
 
 

@@ -5,6 +5,7 @@ import re
 import pysam 
 import pandas as pd
 from datetime import date
+from pybedtools import BedTool
 
 today = date.today()
 DATE =  today.strftime("%Y/%m/%d")
@@ -135,10 +136,51 @@ bedToBigBed -type=bed9+27 -tab -as={SDIR}/templates/sedef.as {input.bed} {input.
 bedToBigBed -type=bed9+27 -tab -as={SDIR}/templates/sedef.as {input.lowid} {input.fai} {output.lowid}
 """
 
+
+rule find_cen:
+    input:
+        rm = RMBED,
+    output:
+        tmp = temp(f"SEDEF/tmp.{SM}.cen.bed"),
+        bed = f"SEDEF/{SM}.cen.bed",
+    resources:
+        mem=8,
+    threads:1
+    shell:"""
+grep 'ALR/Alpha' {input.rm} | \
+        bedtools merge -d 50 -i - | \
+        awk '($3-$2)>50' | \
+        bedtools merge -d 100 -i - | \
+        awk '($3-$2)>10000' | \
+        bedtools merge -d 200000 -i - | \
+        awk '{{print $0"\t"$3-$2}}' | \
+        sort -k 1,1 -k4,4n > {output.tmp} 
+
+bedtools groupby -g 1 -c 2,3 -o last,last -i {output.tmp} > {output.bed} 
+"""
+
+rule sum_sedef:
+    input:
+        bed = rules.sedef_browser.output.bed,
+        lowid = rules.sedef_browser.output.lowid,
+        cen = rules.find_cen.output.bed,
+    output:
+        xlsx = f"SEDEF/{SM}.summary.xlsx",
+        lowid = f"SEDEF/{SM}.lowid.summary.xlsx",
+    resources:
+        mem=8,
+    threads:1
+    shell:"""
+{SDIR}/scripts/sedef_summary.py --cen {input.cen} --excel {output.xlsx} {input.bed}
+{SDIR}/scripts/sedef_summary.py --cen {input.cen} --excel {output.lowid} {input.lowid}
+"""
+
 rule sedef:
 	input:
 		rules.sedef_browser.output,
 		rules.sedef_bb.output,
+        rules.find_cen.output.bed,
+        rules.sum_sedef.output,
 
 
 

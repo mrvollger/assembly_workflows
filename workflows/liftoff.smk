@@ -203,10 +203,23 @@ bedToBigBed -extraIndex=name,name2 -type=bed12+7 -tab -as={SDIR}/templates/bigGe
 
 """
 
+rule liftoff_sum:
+    input:
+        tbl=rules.gff_tbl.output.all,
+    output:
+        xlsx="Liftoff/{SM}.summary.xlsx",
+    threads: 1
+    resources:
+        mem=8,
+    shell:"""
+{SDIR}/scripts/liftoff_summary.py -x {output.xlsx} {input.tbl}
+"""
+
 rule liftoff:
 	input:
 		orf = expand(rules.orf_gff.output, SM=[SM]),
 		tbl = expand(rules.gff_tbl.output, SM=[SM]),
+		xlsx = expand(rules.liftoff_sum.output, SM=[SM]),
 		bbs = expand(rules.orf_bb.output, SM=[SM]),
 
 

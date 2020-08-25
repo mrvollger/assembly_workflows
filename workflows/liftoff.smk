@@ -151,7 +151,7 @@ rule orf_gff:
     | sed 's/CDStopAdjusted/cDStopAdjusted/g' > {output.all}
 """
 
-gfftbl="@chr,@start,@end,@id,@strand,@geneid,gene_name,locus,@cdslen,@numexons,sequence_ID,coverage,copy_num_ID"
+gfftbl="@chr,@start,@end,@id,@strand,@geneid,gene_name,@cdslen,@numexons,sequence_ID,coverage,copy_num_ID"
 headertbl="#"+gfftbl.replace("@","").replace(",",'\\t')+"\\n"
 rule gff_tbl:
     input:

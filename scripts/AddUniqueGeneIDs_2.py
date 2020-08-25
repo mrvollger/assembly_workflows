@@ -14,7 +14,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
 
-    dupatts = "[\s;](gene_name|ID|Parent|transcript_id|gene_id|protein_id|transcript_name)"
+    dupatts = "(gene_name|ID|Parent|transcript_id|gene_id|protein_id|transcript_name)"
     attpat = re.compile(f"({dupatts}=[^;]+);")
     print(attpat)
     copy_num_ID = ""

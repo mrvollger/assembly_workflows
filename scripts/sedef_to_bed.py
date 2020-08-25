@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--symetric", help="make sedef output symetric, set to 0 to disable.", default = 1)
     parser.add_argument("-l", "--minlength", help=" ", type=int, default=1000)
     parser.add_argument("-i", "--minidentity", help=" ", type=float, default=0.9)
+    parser.add_argument("--minindelidentity", help=" ", type=float, default=0.5)
     parser.add_argument("--sat", help="Remove dups that are this fraction of sat or more", type=float, default=0.70)
     parser.add_argument('-d', help="store args.d as true if -d",  action="store_true", default=False)
     args = parser.parse_args()
@@ -66,9 +67,9 @@ if __name__ == "__main__":
     df = df[bed9 + extra]
     df.rename(columns={"chr1":"#chr1"}, inplace=True)
 
-
-    sd = df.loc[(df.aln_len >= args.minlength) & (df.fracMatch >= args.minidentity)] 
-    filt = df.loc[(df.aln_len < args.minlength) | (df.fracMatch < args.minidentity)] 
+    cond = (df.aln_len >= args.minlength) & (df.fracMatch >= args.minidentity) & (df.fracMatchIndel >= args.minindelidentity)
+    sd = df.loc[cond] 
+    filt = df.loc[~cond] 
     sd.to_csv(args.output, index=False, sep="\t")
     filt.to_csv(args.filt, index=False, sep="\t")
 

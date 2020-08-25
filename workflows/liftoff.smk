@@ -145,11 +145,31 @@ rule orf_gff:
     | gffread --keep-comments -F -M -K /dev/stdin \
     | sed 's/CDStopAdjusted/cDStopAdjusted/g' > {output.gff}
 
-
 {SDIR}/scripts/AddUniqueGeneIDs_2.py {input.gff} \
     | gffread --adj-stop -F -g {input.fasta} /dev/stdin \
     | gffread --keep-comments -F -M -K /dev/stdin \
     | sed 's/CDStopAdjusted/cDStopAdjusted/g' > {output.all}
+"""
+
+gfftbl="@chr,@start,@end,@id,@strand,@geneid,gene_name,locus,@cdslen,@numexons,sequence_ID,coverage,copy_num_ID"
+headertbl="#"+gfftbl.replace("@","").replace(",",'\\t')+"\\n"
+rule gff_tbl:
+    input:
+        fasta =  FASTA,
+        gff="Liftoff/{SM}.orf_only.gff3",
+        all="Liftoff/{SM}.all.gff3",
+    output:
+        tbl="Liftoff/{SM}.orf_only.tbl",
+        all="Liftoff/{SM}.all.tbl",
+    threads: 1
+    resources:
+        mem=8,
+    shell:"""
+printf '{headertbl}' > {output.tbl}
+gffread -g {input.fasta} --table {gfftbl} {input.gff} >> {output.tbl}
+
+printf '{headertbl}' > {output.all}
+gffread -g {input.fasta} --table {gfftbl} {input.all} >> {output.all}
 """
 
 rule orf_bb:
@@ -186,6 +206,7 @@ bedToBigBed -extraIndex=name,name2 -type=bed12+7 -tab -as={SDIR}/templates/bigGe
 rule liftoff:
 	input:
 		orf = expand(rules.orf_gff.output, SM=[SM]),
+		tbl = expand(rules.gff_tbl.output, SM=[SM]),
 		bbs = expand(rules.orf_bb.output, SM=[SM]),
 
 

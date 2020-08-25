@@ -36,7 +36,7 @@ SM = "asm"
 if("sample" in config): SM = config["sample"]
 SPECIES = "human"
 if("species" in config): SPECIES = config["species"]
-THREADS=16
+THREADS = 8
 if("threads" in config): THREADS = config["threads"]
 
 
@@ -55,10 +55,15 @@ FASTA_FMT = f"Masked/temp/{SM}_{{ID}}.fasta"
 DUP = f"Masked/{SM}_dupmasker.tbl"
 COLOR = f"Masked/{SM}_dupmasker_colors.tbl"
 BED = f"Masked/{SM}_dupmasker_colors.bed"
+DUPLICONS = f"Masked/{SM}.duplicons"
+DUPBED = f"Masked/{SM}.duplicons.bed"
+
+
 DMHTML = f"Masked/{SM}_dupmasker_colors.html"
 RM = os.path.abspath(f"Masked/{SM}_repeatmasker.out")
 RMBED = os.path.abspath(f"Masked/{SM}_repeatmasker.out.bed")
 TRFBED = os.path.abspath(f"Masked/{SM}_trf.bed")
+
 
 rule split_fasta:
 	input:
@@ -216,6 +221,61 @@ rule DupMaskerColor:
 	shell:"""
 {SDIR}/scripts/DupMask_parserV6.pl -i {input.dups} -E -o {output.dupcolor}
 """
+
+
+
+
+"""
+SW score = smith-waterman score of the match (complexity-adjusted )
+perc div. = %substitutions in matching region.
+perc del. = %deletions (in query seq rel to subject) in matching region.
+perc ins. = %insertions (in query seq rel to subject) in matching region.
+qry seq = id of query sequence.
+qry begin = starting position of match in query sequence.
+qry end = ending position of match in query sequence.
+qry (left) = no. of bases in query sequence past the ending position of match (so 0 means that the match extended all the way to the end of the query sequence).
+C = "C" match is found on the reverse strand
+subj seq = id of the duplicon.
+subj (left) = The remaining bases in (complement of) subject sequence prior to beginning of the match.
+subj end = starting position of match in subject sequence (using top-strand numbering).
+subj begin = ending position of match in subject sequence.
+"""
+rule duplicons:
+    input:
+        dups = expand( rules.RunDupMasker.output.dups, ID=IDS, SM=SM),
+    output:
+        dups=DUPLICONS,
+        bed=DUPBED,
+    resources:
+        mem=4,
+    threads: 1 
+    run:
+        shell(" cat {input.dups} | sort -k 5,5 -k6,6n > {output.dups}") 
+        bed = open(output.bed,"w+")
+        bed.write("#contig\tstart\tend\tduplicon\tscore\tstrand\tancestral_position\tchr_band\tsub_rate\tdel_rate\tins_rate\n")
+        for line in open(output.dups):
+            line=line.strip().split()
+            if(line[8]=="C"):
+                line[8]="-"
+            else:
+                line.insert(8, "+")
+           
+            score, sub, D, I, q_nm, q_st, q_en, q_left, strand, r_nm, r_left, r_st, r_en = line[0:13]
+            duplicon, anc, band = r_nm.split("|")
+            band = anc.split(":")[0].strip("chr") + band
+            if(band=="NANA"): band="NA"
+
+            bed.write(
+                    ("{}"+"\t{}"*10 + "\n").format(
+                        q_nm, q_st, q_en, duplicon,
+                        score, strand, anc, band,
+                        sub, D, I)
+                    )
+        bed.close()
+
+
+
+
 
 
 #

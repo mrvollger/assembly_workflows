@@ -124,7 +124,7 @@ rule run_liftoff:
 	resources:
 		mem=8,
 	shell:"""
-~mvollger/.local/bin/liftoff -dir {output.temp} -sc 0.95 -copies -p {threads} -r {input.r} -t {input.t} -g {input.gff} -o {output.gff} -u {output.unmapped}
+~mvollger/.local/bin/liftoff -dir {output.temp} -sc 0.85 -copies -p {threads} -r {input.r} -t {input.t} -g {input.gff} -o {output.gff} -u {output.unmapped}
 """
 
 
@@ -207,7 +207,7 @@ rule liftoff_sum:
     input:
         tbl=rules.gff_tbl.output.all,
     output:
-        xlsx="Liftoff/{SM}.summary.xlsx",
+        xlsx="Liftoff/{SM}.liftoff.summary.xlsx",
     threads: 1
     resources:
         mem=8,

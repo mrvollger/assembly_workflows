@@ -165,8 +165,8 @@ rule sum_sedef:
         lowid = rules.sedef_browser.output.lowid,
         cen = rules.find_cen.output.bed,
     output:
-        xlsx = f"SEDEF/{SM}.summary.xlsx",
-        lowid = f"SEDEF/{SM}.lowid.summary.xlsx",
+        xlsx = f"SEDEF/{SM}.sedef.summary.xlsx",
+        lowid = f"SEDEF/{SM}.sedef.lowid.summary.xlsx",
     resources:
         mem=8,
     threads:1

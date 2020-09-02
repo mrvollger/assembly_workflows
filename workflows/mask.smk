@@ -359,7 +359,22 @@ rule DupMaskerHTML:
 		html = open(f"{SDIR}/templates/dupmasker.html").read()
 		open(output["html"], "w+").write(html.format(DATE=DATE, SM=SM))
 
-
+rule DupMaskerSummary:
+    input:
+        bed=rules.duplicons.output.bed,
+    output:
+        tbl = f"Masked/{SM}.duplicons.tbl",
+        excel = f"Masked/{SM}_duplicons.xlsx",
+    resources:
+        mem=4,
+    threads: 1 
+    run:
+        shell("""sort -k4,4 {input.bed} | \
+                awk '{{print $0"\t"$3-$2}}' | \
+                bedtools groupby -g 4,8,7 -c 4,12 -o count,sum -i - > {output.tbl}""")
+        df = pd.read_csv(output.tbl, sep="\t", names=["Duplicon", "Chr band", "Ancestral position", "Count", "bp"])
+        with pd.ExcelWriter(output.excel) as writer:
+            df.to_excel(writer, sheet_name='Duplicons', index=False)
 
 ####################################################################
 ####################### TRF MASKER #################################

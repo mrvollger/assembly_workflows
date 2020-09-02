@@ -19,11 +19,14 @@ include: "liftoff.smk"
 include: "mask.smk"
 # sedef also includes mask.smk so it can run standalone need be
 include: "sedef.smk"
-
+include: "align.smk"
 
 rule all:
     input:
         rules.liftoff.input,
         rules.sedef.input,
         rules.DupMaskerBed.output.bed,
+        rules.DupMaskerSummary.output,
+        rules.align.input,
+
 

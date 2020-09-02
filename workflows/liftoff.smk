@@ -124,7 +124,10 @@ rule run_liftoff:
 	resources:
 		mem=8,
 	shell:"""
-liftoff -dir {output.temp} -sc 0.85 -copies -p {threads} -r {input.r} -t {input.t} -g {input.gff} -o {output.gff} -u {output.unmapped}
+liftoff -dir {output.temp} \
+        -sc 0.85 -copies -p {threads} \
+        -g {input.gff} -o {output.gff} -u {output.unmapped} \
+         {input.t} {input.r} \
 """
 
 

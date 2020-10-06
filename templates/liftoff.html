@@ -1,0 +1,38 @@
+<h2>Description</h2>
+A track showing gene models as from liftoff.
+<p></p>
+
+<h2>Methods</h2>
+<p>
+</p>
+
+<h2>Display Conventions and Configuration</h2>
+<p>
+Liftoff was run with the following command using the comprehensive GenCode Release 35 (GRCh38.p13) gff.
+
+liftoff -dir {output.temp} -sc 0.85 -copies -p {threads} -g {input.gff} -o {output.gff} -u {output.unmapped} {input.t} {input.r}
+
+Custom scripts were used to make a bed file from the resulting gff. 
+
+</p>
+
+
+<h2>Data access</h2>
+<!-- Optional, links for downloading the data if there is a separate source beside the
+  browser  -->
+<p></p>
+
+<h2>Release history</h2>
+<ol>
+	<li> 09/08/2020
+</ol>
+
+<h2>Contact</h2>
+<p>Contact <a href="mailto:mvollger@uw.edu"> Mitchell R. Vollger &lt;mvollger@uw.edu&gt;</a>
+</p>
+
+<h2>Credits</h2>
+<p>
+Liftoff: an accurate gene annotation mapping tool, doi: https://doi.org/10.1101/2020.06.24.169680
+</p>
+

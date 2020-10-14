@@ -168,6 +168,7 @@ rule clean_gff:
         gff = get_gff,
     output:
         gff = temp("temp/{SM}.small.gff"),
+        tmpgff = temp("temp/{SM}.tmpsmall.gff"),
         rgns = temp("temp/{SM}.rgns.bed"),
         bed = temp("temp/{SM}.small.bed"),
     params:
@@ -177,16 +178,28 @@ rule clean_gff:
         open(output.rgns, "w+").write("\n".join(params.bed) )
         shell(""" bedtools intersect -header -f 1.0 -a {input.gff} -b {output.rgns} > {output.gff} """)
         shell("""
-        {SDIR}/scripts/AddUniqueGeneIDs_2.py {output.gff} \
-                | gffread --adj-stop -C -F -g {input.ref} /dev/stdin \
-                | gffread --keep-comments -F -J -g {input.ref} /dev/stdin \
-                | gffread --keep-comments -F -M -K /dev/stdin \
-                | sed 's/CDStopAdjusted/cDStopAdjusted/g' | \
-        gff3ToGenePred -geneNameAttr=gene_name -useName /dev/stdin /dev/stdout | \
-                genePredToBigGenePred /dev/stdin /dev/stdout | \
-                awk -F $'\t' '{{ t = $4; $4 = $13; $13 = t; print; }}' OFS=$'\t' | \
-                bedtools sort -i - > {output.bed} 
-            """)
+            {SDIR}/scripts/AddUniqueGeneIDs_2.py {output.gff} \
+                    | {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-comments --adj-stop -C -F -g {input.ref} /dev/stdin \
+                    | {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-comments -F -J -g {input.ref} /dev/stdin \
+                    | {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-comments -F -M -K /dev/stdin \
+                    | sed 's/CDStopAdjusted/cDStopAdjusted/g' > {output.tmpgff}""")
+        
+        gff=open(output.tmpgff).readlines()
+        count=0
+        for line in gff:
+            if(line[0]=="#"): continue
+            count+=1
+            print(line)
+        print(count)
+        if(count==0):
+            shell("touch {output.bed}")
+        else:
+            shell("""
+            gff3ToGenePred -geneNameAttr=gene_name -useName {output.tmpgff} /dev/stdout | \
+                    genePredToBigGenePred /dev/stdin /dev/stdout | \
+                    awk -F $'\t' '{{ t = $4; $4 = $13; $13 = t; print; }}' OFS=$'\t' | \
+                    bedtools sort -i - > {output.bed} 
+                """)
 
 rule get_ref_genes:
     input:
@@ -266,8 +279,8 @@ rule minimiro:
 		paf = rules.minimap2.output.paf,
 		rmout = expand("temp/{{SM}}_{SEQ}.fasta.out", SEQ=SEQS),
 		dmout = expand("temp/{{SM}}_{SEQ}.fasta.duplicons.extra", SEQ=SEQS),
-		genes = rules.get_ref_genes.output.bed12,
-		query_genes = rules.query_genes.output.bed12,
+        #genes = rules.get_ref_genes.output.bed12,
+        #query_genes = rules.query_genes.output.bed12,
 	output:
 		ps	= "temp/{SM}_{SCORE}_aln.ps",
 		pdf	= "minimiro_smk_out/{SM}_{SCORE}_aln.pdf",
@@ -276,11 +289,11 @@ rule minimiro:
 {SDIR}/scripts/minimiro.py --paf {input.paf} \
 	--rm {input.rmout} \
 	--dm {input.dmout} \
-	--bed <(cut -f 1-12 {input.genes}) <(cut -f 1-12 {input.query_genes}) \
 	--bestn 1000 \
 	-o {output.ps} && \
 	ps2pdf {output.ps} {output.pdf}
 """
+#--bed <(cut -f 1-12 {input.genes}) <(cut -f 1-12 {input.query_genes}) \
 
 def get_bam(wc):
 	SM = str(wc.SM)

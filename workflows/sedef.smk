@@ -45,6 +45,7 @@ rule sedef_masked_fasta:
 		rm = RMBED,
 	output:
 		bed = temp(f"SEDEF/{SM}.tmp.msk.bed"),
+		bed2 = temp(f"SEDEF/{SM}.tmp2.msk.bed"),
 		fasta = MASKED,
 		fai = MASKED+".fai",
 	resources:
@@ -54,12 +55,29 @@ rule sedef_masked_fasta:
 # very it is very common to find a 27 base pair gap between alpha sat annotations
 # similarly it is commone to find a 49 bp gap in anotations in HSAT arrays
 # therefor I merge some of the sat features from rm
+# additionally there are some huge HSAT arrays that are not annotated as  HSAT by rm and instead are
+# Simple_repeat
+
 
 grep Alpha {input.rm} | bedtools merge -d 35 -i - > {output.bed}  
 grep HSAT {input.rm} | bedtools merge -d 75 -i - >> {output.bed}  
+# merge large simple_repeats
+grep Simple_repeat {input.rm} | \
+        awk '$3-$2 > 1000 {{print $0}}' | \
+        bedtools merge -d 100 -i - | \
+        bedtools slop -b 100 -g {input.fasta}.fai -i - >> {output.bed}  
+
+# combine custome merges with trf and rm
 cat {input.trf} {input.rm} | cut -f 1-3 >> {output.bed}  
 
+# make large merge where large entries are allowed to merge 
+# together further
 cut -f 1-3 {output.bed} | bedtools sort -i - | bedtools merge -i - | \
+        awk '$3-$2 > 2000 {{print $0}}' | \
+        bedtools merge -d 100 -i - > {output.bed2}  
+
+
+cut -f 1-3 {output.bed} {output.bed2} | bedtools sort -i - | bedtools merge -i - | \
 	seqtk seq -l 50 -M /dev/stdin {input.fasta} > {output.fasta}
 
 samtools faidx {output.fasta}
@@ -164,6 +182,7 @@ rule sum_sedef:
         bed = rules.sedef_browser.output.bed,
         lowid = rules.sedef_browser.output.lowid,
         cen = rules.find_cen.output.bed,
+        fai = MASKED+".fai",
     output:
         xlsx = f"SEDEF/{SM}.sedef.summary.xlsx",
         lowid = f"SEDEF/{SM}.sedef.lowid.summary.xlsx",
@@ -171,8 +190,8 @@ rule sum_sedef:
         mem=8,
     threads:1
     shell:"""
-{SDIR}/scripts/sedef_summary.py --cen {input.cen} --excel {output.xlsx} {input.bed}
-{SDIR}/scripts/sedef_summary.py --cen {input.cen} --excel {output.lowid} {input.lowid}
+{SDIR}/scripts/sedef_summary.py --fai {input.fai} --cen {input.cen} --excel {output.xlsx} {input.bed}
+{SDIR}/scripts/sedef_summary.py --fai {input.fai} --cen {input.cen} --excel {output.lowid} {input.lowid}
 """
 
 rule sedef:

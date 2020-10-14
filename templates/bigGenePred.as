@@ -17,7 +17,8 @@ table bigGenePred
    string cdsStartStat; "Status of CDS start annotation (none, unknown, incomplete, or complete)"
    string cdsEndStat;   "Status of CDS end annotation (none, unknown, incomplete, or complete)"
    int[blockCount] exonFrames; "Exon frame {0,1,2}, or -1 if no frame for exon"
-   string type;         "Transcript type, empty for me"
+   string type;        "Transcript type"
    string geneName;    "Primary identifier for gene"
    string geneName2;   "Alternative/human readable gene name"
+   string geneType;    "Gene type"
    )

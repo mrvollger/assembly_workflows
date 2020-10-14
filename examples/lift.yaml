@@ -1,0 +1,20 @@
+sample:
+  - AG07107_MMU
+  - CHM1 
+  - Clint_PTR
+  - Kamilah_GGO
+  - Karenina.SSY 
+  - Mhudiblu.PPA 
+  - OwlMonkey_ANA
+  - Susie_PAB 
+fasta: 
+  -  /net/eichler/vol26/projects/chm13_t2t/nobackups/freeze_1_assemblies/hifiasm_out/AG07107_MMU.pri.fa.gz
+  -  /net/eichler/vol26/projects/chm13_t2t/nobackups/freeze_1_assemblies/hifiasm_out/CHM1.pri.fa.gz
+  -  /net/eichler/vol26/projects/chm13_t2t/nobackups/freeze_1_assemblies/hifiasm_out/Clint_PTR.pri.fa.gz
+  -  /net/eichler/vol26/projects/chm13_t2t/nobackups/freeze_1_assemblies/hifiasm_out/Kamilah_GGO.pri.fa.gz
+  -  /net/eichler/vol26/projects/chm13_t2t/nobackups/freeze_1_assemblies/hifiasm_out/Karenina.SSY.pri.fa.gz
+  -  /net/eichler/vol26/projects/chm13_t2t/nobackups/freeze_1_assemblies/hifiasm_out/Mhudiblu.PPA.pri.fa.gz
+  -  /net/eichler/vol26/projects/chm13_t2t/nobackups/freeze_1_assemblies/hifiasm_out/OwlMonkey_ANA.pri.fa.gz
+  -  /net/eichler/vol26/projects/chm13_t2t/nobackups/freeze_1_assemblies/hifiasm_out/Susie_PAB.pri.fa.gz
+#gff: /net/eichler/vol26/projects/chm13_t2t/nobackups/Assembly_analysis/Liftoff/chm13.draft_v1.0_plus38Y.all.gff3
+#ref: /net/eichler/vol26/projects/chm13_t2t/nobackups/Assembly_analysis/SEDEF/chm13.draft_v1.0_plus38Y_masked.fasta

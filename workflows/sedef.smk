@@ -194,12 +194,28 @@ rule sum_sedef:
 {SDIR}/scripts/sedef_summary.py --fai {input.fai} --cen {input.cen} --excel {output.lowid} {input.lowid}
 """
 
+
+rule enriched:
+    input:
+        bed = rules.sedef_browser.output.bed,
+        fai = MASKED+".fai",
+    output:
+        bed = f"SEDEF/{SM}.sedef.enriched.bed",
+    resources:
+        mem=8,
+    threads:1
+    shell:"""
+{SDIR}/scripts/enriched.py {input.bed} {input.fai} > {output.bed}
+"""
+
+
 rule sedef:
 	input:
 		rules.sedef_browser.output,
 		rules.sedef_bb.output,
         rules.find_cen.output.bed,
         rules.sum_sedef.output,
+        rules.enriched.output.bed,
 
 
 

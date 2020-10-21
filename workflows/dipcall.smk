@@ -19,14 +19,15 @@ configfile: "dipcall.yaml"
 REF=os.path.abspath(config["ref"])
 GFF=os.path.abspath(config["gff"])
 TBL=os.path.abspath(config["tbl"])
-df = pd.read_csv(TBL, sep="\s+")
+THREADS=16
+df = pd.read_csv(TBL, sep="\s+", comment="#")
 
+HAPS=["hap1","hap2"]
 SMS=df["sample"]
 SM_ASM = {}
 for idx, row in df.iterrows():
     SM_ASM[row["sample"]] = {"pat": os.path.abspath(row.pat), "mat":os.path.abspath(row.mat)}
 
-HAPS=["hap1","hap2"]
 
 #
 # RULES
@@ -53,8 +54,7 @@ tar -jxf dipcall-0.1_x64-linux.tar.bz2
 rm dipcall-0.1_x64-linux.tar.bz2
 """
 
-THREADS=32
-MM_OPT=f"-x asm20 -r50k --cs -t {THREADS} -I 8G -2K 1500m"
+MM_OPT=f"-x asm5 -r50k --cs -t {THREADS} -I 8G -2K 1500m"
 def get_pat(wc):
     return(SM_ASM[wc.SM]["pat"])
 def get_mat(wc):
@@ -91,7 +91,7 @@ rule dipcall_sam:
         log=temp("{SM}.{HAP}.sam.gz.log"),
     threads:THREADS
     shell:"""
-dipcall.kit/minimap2 -R @RG\\tID:{wildcards.SM}\\tSM:{wildcards.SM} -a {MM_OPT} {input.ref} {input.hap} \
+dipcall.kit/minimap2 -R @RG'\\tID':{wildcards.SM}'\\t'SM:{wildcards.SM} -a {MM_OPT} {input.ref} {input.hap} \
     2> {log.log} | pigz -p {threads} > {output.sam}
 """
 
@@ -137,12 +137,13 @@ rule dipcall_hap_bed:
         paf=rules.dipcall_paf.output.paf,
     output:
         var="{SM}.{HAP}.var.gz",
-        vst="{SM}.{HAP}.vst",
         bed="{SM}.{HAP}.bed",
+    log:
+        vst="{SM}.{HAP}.vst",
     threads: 1
     shell: """
-gzip -dc {input.paf} | sort -k6,6 -k8,8n | dipkall.kit/k8 dipcall.kit/paftools.js call - \
-       2> {output.vst} | gzip > {output.var}
+gzip -dc {input.paf} | sort -k6,6 -k8,8n | dipcall.kit/k8 dipcall.kit/paftools.js call - \
+       2> {log.vst} | gzip > {output.var}
 gzip -dc {output.var} | grep ^R | cut -f2- > {output.bed}
 """
 
@@ -232,6 +233,7 @@ rule snpeff_annotate:
         db=rules.snpeff_build.output.db,
         vcf=rules.dipcall_vcf.output.vcf,
         bed=rules.dipcall_bed.output.bed,
+        config=rules.snpeff_setup.output.config,
     output:
         vcf="{SM}.dip.anno.vcf.gz",
         html="{SM}.anno.html",
@@ -243,7 +245,5 @@ java -jar snpEff/snpEff.jar \
        -c snpEff.config -s {output.html} -csvStats {output.csv} -fi {input.bed} \
        REF {input.vcf} | bgzip -@ 4 > {output.vcf}
 """
-
-
 
 

@@ -176,7 +176,10 @@ rule clean_gff:
     threads: 8
     run:
         open(output.rgns, "w+").write("\n".join(params.bed) )
-        shell(""" bedtools intersect -header -f 1.0 -a {input.gff} -b {output.rgns} > {output.gff} """)
+        shell("""
+                #echo '##gff-version 3' > {output.gff} 
+                bedtools intersect -header -f 1.0 -a {input.gff} -b {output.rgns} | \
+                    {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-genes -F > {output.gff} """)
         shell("""
             {SDIR}/scripts/AddUniqueGeneIDs_2.py {output.gff} \
                     | {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-comments --adj-stop -C -F -g {input.ref} /dev/stdin \
@@ -189,8 +192,6 @@ rule clean_gff:
         for line in gff:
             if(line[0]=="#"): continue
             count+=1
-            print(line)
-        print(count)
         if(count==0):
             shell("touch {output.bed}")
         else:
@@ -275,25 +276,25 @@ minimap2 -x asm20 -r 200000 -s {params.score} -p 0.01 -N 1000 --cs {input.ref} {
 
 
 rule minimiro:
-	input:
-		paf = rules.minimap2.output.paf,
-		rmout = expand("temp/{{SM}}_{SEQ}.fasta.out", SEQ=SEQS),
-		dmout = expand("temp/{{SM}}_{SEQ}.fasta.duplicons.extra", SEQ=SEQS),
-        #genes = rules.get_ref_genes.output.bed12,
-        #query_genes = rules.query_genes.output.bed12,
-	output:
-		ps	= "temp/{SM}_{SCORE}_aln.ps",
-		pdf	= "minimiro_smk_out/{SM}_{SCORE}_aln.pdf",
-	threads: 1
+    input:
+        paf = rules.minimap2.output.paf,
+        rmout = expand("temp/{{SM}}_{SEQ}.fasta.out", SEQ=SEQS),
+        dmout = expand("temp/{{SM}}_{SEQ}.fasta.duplicons.extra", SEQ=SEQS),
+        genes = rules.get_ref_genes.output.bed12,
+        query_genes = rules.query_genes.output.bed12,
+    output:
+        ps	= "temp/{SM}_{SCORE}_aln.ps",
+        pdf	= "minimiro_smk_out/{SM}_{SCORE}_aln.pdf",
+    threads: 1
 	shell:"""
 {SDIR}/scripts/minimiro.py --paf {input.paf} \
 	--rm {input.rmout} \
 	--dm {input.dmout} \
+    --bed <(cut -f 1-12 {input.genes}) <(cut -f 1-12 {input.query_genes}) \
 	--bestn 1000 \
 	-o {output.ps} && \
 	ps2pdf {output.ps} {output.pdf}
 """
-#--bed <(cut -f 1-12 {input.genes}) <(cut -f 1-12 {input.query_genes}) \
 
 def get_bam(wc):
 	SM = str(wc.SM)

@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     dupatts = "(gene_name|ID|Parent|transcript_id|gene_id|protein_id|transcript_name)"
     attpat = re.compile(f"({dupatts}=[^;]+);")
-    print(attpat)
+    #sys.stderr.write(attpat)
     copy_num_ID = ""
     for line in open(args.gff):
         t = line.strip().split()
@@ -27,6 +27,9 @@ if __name__ == "__main__":
         typ = t[2]
         if(typ == "gene"):
             match = re.findall("copy_num_ID=([^;]+)(_\d+)", t[8] )
+            #sys.stderr.write(str(match)+"\n")
+            if(len(match)==0):
+                continue
             assert len(match) == 1
             geneid, copy_num_ID = match[0]
             if(copy_num_ID == "_0"):

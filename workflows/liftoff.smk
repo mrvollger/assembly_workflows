@@ -25,30 +25,37 @@ HTTP = HTTPRemoteProvider()
 GRCH38=HTTP.remote("https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.39_GRCh38.p13/GRCh38_major_release_seqs_for_alignment_pipelines/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz")
 RGFF=FTP.remote("ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_34/gencode.v34.annotation.gff3.gz")
 
+
+
 #
 # Sample config
 #
-FASTA = config["fasta"] 
-if(isinstance(FASTA, str)):
-    FASTAS = [FASTA]
-else:
-    FASTAS = FASTA
-
-for FASTA in FASTAS:
-    assert os.path.isabs(FASTA), f"Must specify absolute path for {FASTA}"
-    #assert os.path.exists(FASTA+".fai"), f"Index must exist. Try: samtools faidx {FASTA}"
-
-
-SM = "asm"
-if("sample" in config): SM = config["sample"]
 THREADS=16
-if("threads" in config): THREADS = config["threads"]
+if("threads" in config): 
+  THREADS = config["threads"]
 
-if(isinstance(SM, str)):
-    SMS = [SM]
-else:
-    SMS=SM
+# read from tbl
+if("tbl" in config): 
+  df = pd.read_csv(config["tbl"], sep="\s+", comment="#")
+  FASTAS = df.fasta
+  SMS = df["sample"] 
+else: # read from config
+    FASTA = config["fasta"] 
+    if(isinstance(FASTA, str)):
+        FASTAS = [FASTA]
+    else:
+        FASTAS = FASTA
+    
+    SM = "asm"
+    if("sample" in config): SM = config["sample"]
+    if(isinstance(SM, str)):
+        SMS = [SM]
+    else:
+        SMS=SM
 
+#for FASTA in FASTAS:
+#assert os.path.isabs(FASTA), f"Must specify absolute path for {FASTA}"
+#assert os.path.exists(FASTA+".fai"), f"Index must exist. Try: samtools faidx {FASTA}"
 
 SM_FA = {}
 for sm, fa in zip(SMS,FASTAS):
@@ -72,7 +79,7 @@ if("gff" in config):
     GFF = config["gff"]
     assert os.path.isabs(GFF), f"Must specify absolute path for {GFF}"
 else:
-	GFF = 'Liftoff/tmp/gencode.v34.primary_assembly.annotation.gff3',
+	GFF = os.path.abspath('Liftoff/tmp/gencode.v34.primary_assembly.annotation.gff3'),
 
 if("regions" in config):
     RGN = config["regions"]
@@ -119,8 +126,8 @@ rule clean_fasta:
     input:
         fasta =  get_fasta,
     output:
-        fasta="Liftoff/tmp/{SM}.fasta",
-        fai="Liftoff/tmp/{SM}.fasta.fai"
+        fasta=temp("Liftoff/tmp/{SM}.fasta"),
+        fai=temp("Liftoff/tmp/{SM}.fasta.fai")
     run:
         tag=input.fasta.strip()[-3:]
         if(tag==".gz"):
@@ -131,7 +138,7 @@ rule clean_fasta:
 
 rule subset_gff:
     input:
-        gff = ancient(rules.get_gff.output.gff),
+        gff = rules.get_gff.output.gff,
     output:
         gff = temp("Liftoff/tmp/{SM}.subset.gff"),
     threads: 1

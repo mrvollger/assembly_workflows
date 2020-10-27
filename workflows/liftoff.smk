@@ -79,7 +79,8 @@ if("gff" in config):
     GFF = config["gff"]
     assert os.path.isabs(GFF), f"Must specify absolute path for {GFF}"
 else:
-	GFF = os.path.abspath('Liftoff/tmp/gencode.v34.primary_assembly.annotation.gff3'),
+    GFF = 'Liftoff/tmp/gencode.v34.primary_assembly.annotation.gff3'
+    print(GFF)
 
 if("regions" in config):
     RGN = config["regions"]
@@ -140,7 +141,7 @@ rule subset_gff:
     input:
         gff = rules.get_gff.output.gff,
     output:
-        gff = temp("Liftoff/tmp/{SM}.subset.gff"),
+        gff = temp("Liftoff/tmp/{SM}.subset.gff3"),
     threads: 1
     resources:
         mem=8

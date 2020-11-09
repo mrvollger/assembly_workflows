@@ -42,6 +42,7 @@ rule all:
     input:
         vcf = expand("{SM}.dip.vcf.gz", SM=SMS),
         vcf_a = expand("{SM}.dip.anno.vcf.gz", SM=SMS),
+        vcfa = "all.anno.vcf.gz",
 
 rule get_dipcall:
     input:
@@ -246,4 +247,43 @@ java -jar snpEff/snpEff.jar \
        REF {input.vcf} | bgzip -@ 4 > {output.vcf}
 """
 
+rule index_vcf:
+    input:
+        vcf=rules.dipcall_vcf.output.vcf,
+    output:
+        csi=rules.dipcall_vcf.output.vcf + ".csi",
+    threads: 4
+    shell:"""
+bcftools index {input.vcf}
+"""
+
+rule merge_vcf:
+  input:
+    vcf = expand("{SM}.dip.vcf.gz", SM=SMS),
+    csi= expand(rules.dipcall_vcf.output.vcf + ".csi",SM=SMS),
+  output:
+    vcf = "all.vcf.gz",
+  threads: 16
+  shell:"""
+bcftools merge --threads {threads} {input.vcf} | bgzip -@ {threads} > {output.vcf}
+"""
+
+
+
+rule merge_anno:
+  input:
+    vcf = rules.merge_vcf.output.vcf,
+    db = rules.snpeff_build.output.db,
+    config = rules.snpeff_setup.output.config,
+  output:
+    vcf = "all.anno.vcf.gz",
+    html="all.anno.html",
+    csv="all.anno.csv",
+    genes="all.anno.genes.txt",
+  shell:"""
+java -jar snpEff/snpEff.jar \
+       -c snpEff.config -s {output.html} -csvStats {output.csv} \
+       REF {input.vcf} | bgzip -@ {threads} > {output.vcf}
+
+"""
 

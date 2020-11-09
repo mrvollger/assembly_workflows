@@ -36,6 +36,7 @@ parser.add_argument("--start", help="start positioon", type=int, default=0)
 parser.add_argument("-e", "--exclude", nargs="+", help="exclude these conitg names from anlysis", default=[])
 parser.add_argument("-s", "--score", help="threashold for reporting alignments, same as -s in miropeats [100]", type=int, default=100)
 parser.add_argument("-d", "--drop", help="if the alignemnt drops by [score/10] terminate the segment", type=int, default=None)
+parser.add_argument('--simple', action='store_true', default=False)
 args = parser.parse_args()
 if(args.drop is None):
 	args.drop = int(args.score / 10)
@@ -230,7 +231,8 @@ else:
 #
 # PARSE MINIMAP FOR MIROPEATS
 #
-segs = pd.DataFrame(segs, columns=["r_ctg", "r_st", "r_en", "r_len", "q_ctg", "q_st", "q_en", "q_len"]).sort_values(by=["r_ctg", "r_st"])
+segs = pd.DataFrame(segs, columns=["r_ctg", "r_st", "r_en", "r_len", "q_ctg", "q_st", "q_en", "q_len"])
+#.sort_values(by=["r_ctg", "r_st"])
 
 # remove things beofre start 
 segs.r_st = segs.r_st - args.start
@@ -247,8 +249,9 @@ segs.loc[segs.q_st < 0, ["q_st"]] = 0
 
 # set up contig sizes 
 contigs = pd.DataFrame( [ tuple(x) + (1,) for x in segs[["r_ctg","r_len"]].drop_duplicates().values] + [ tuple(x) +(0,) for x in segs[["q_ctg","q_len"]].drop_duplicates().values], columns=["ctg", "len", "ref"] )
-contigs.sort_values(by=["ref", "len"], inplace=True)
-contigs.drop_duplicates(subset=["ctg"], inplace=True, keep="last")
+#contigs.sort_values(by=["ref", "len"], inplace=True)
+contigs = contigs.reindex(index=contigs.index[::-1])
+contigs.drop_duplicates(subset=["ctg"], inplace=True, keep="first")
 def get_contig_num(contig):
 	return(list(contigs["ctg"]).index(contig))
 
@@ -256,15 +259,16 @@ def get_contig_len(contig):
 	return( contigs["len"][contigs["ctg"] == contig ].iloc[0] )
 
 contigs["y"] = contigs.ctg.map(get_contig_num)
-
+# add sorting to segs
+segs.sort_values(by=["r_ctg", "r_st"], inplace=True)
 # add contig lines and labels 
 CTGS = ""
 for idx, row in contigs.iterrows():
 	CTGS += "drop {} mul ({}) drop {} mul ({}) printnames\n".format(row.y, row.ctg, row.y, row.ctg)
 	CTGS += "{} xstretch div cm  drop {} mul tagends\n".format(row["len"], row.y)
-	if(len(args.rm)> 0):
+	if(len(args.rm)> 0 and not args.simple):
 		CTGS += "{} (RepeatMasker) printname_right\n".format(row.y + 0.02 + 0.035)
-	if(len(args.dm)> 0):
+	if(len(args.dm)> 0 and not args.simple):
 		CTGS += "{} (DupMasker) printname_right\n".format(row.y + 0.08 + 0.035)
 
 # add homology lines
@@ -293,7 +297,7 @@ for idx, row in segs.iterrows():
 	if(counter == len(COLORS) ):
 		counter = 0
 SEGS += "Black\n"
-
+if(args.simple): SEGS=""
 
 #
 # READ IN REPEATMASKER
@@ -307,35 +311,34 @@ def get_rm_color(rclass):
 		return(rm_color_map[rclass])
 	return("Black")
 
-if(len(args.rm) > 0):
-	rms = []
-	for frm in args.rm:
-		rms.append( pd.read_csv(frm, delim_whitespace=True, header=None, skiprows=[0,1,2], comment="*", 
-			names = ["score", "div", "del", "ins", "q_ctg", "q_st", "q_en", "q_left", "strand", "repeat", "class", "r_st", "r_en", "r_left", "id"]) )
-		
-	rm = pd.concat(rms, ignore_index=True) 
-	rm = rm[rm.q_ctg.isin(contigs.ctg)]
+if(len(args.rm) > 0 and not args.simple ):
+        rms = []
+        for frm in args.rm:
+                rms.append( pd.read_csv(frm, delim_whitespace=True, header=None, skiprows=[0,1,2], comment="*", 
+                        names = ["score", "div", "del", "ins", "q_ctg", "q_st", "q_en", "q_left", "strand", "repeat", "class", "r_st", "r_en", "r_left", "id"]) )
+                
+        rm = pd.concat(rms, ignore_index=True) 
+        rm = rm[rm.q_ctg.isin(contigs.ctg)]
 
-	rm.q_st = rm.q_st - args.start
-	rm.q_en = rm.q_en - args.start
-	rm = rm[rm.q_st >= 0]
+        rm.q_st = rm.q_st - args.start
+        rm.q_en = rm.q_en - args.start
+        rm = rm[rm.q_st >= 0]
 
-	rm["y"] = rm.q_ctg.map(get_contig_num) + 0.02
-	rm["func"] = rm.strand.map(get_rm_end)
-	rm["rclass"] = rm["class"].str.split("/|\?", expand=True)[0]
-	rm["color"] = rm.rclass.map(get_rm_color)
+        rm["y"] = rm.q_ctg.map(get_contig_num) + 0.02
+        rm["func"] = rm.strand.map(get_rm_end)
+        rm["rclass"] = rm["class"].str.split("/|\?", expand=True)[0]
+        rm["color"] = rm.rclass.map(get_rm_color)
 
-	RM = ""
-	for idx, row in rm.iterrows():
-		if(row.q_en < get_contig_len(row.q_ctg) ):
-			RM += "{}\n{} {} {} {}\n".format(row.color, row.y, row.q_st, row.q_en, row.func)
-	
-	# add a color legend
-	RM += "0 -1.5 cm moveto\nBlack\n(RepeatMasker:\t\t) 50 string cvs show\n"
-	for rclass in rm_color_map:
-		color = rm_color_map[rclass]
-		RM += "{}\n({}\t\t) 50 string cvs show\n".format(color, rclass)
-	RM += "Black\n"
+        RM = ""
+        for idx, row in rm.iterrows():
+                if(row.q_en < get_contig_len(row.q_ctg) ):
+                        RM += "{}\n{} {} {} {}\n".format(row.color, row.y, row.q_st, row.q_en, row.func)
+        # add a color legend
+        RM += "0 -1.5 cm moveto\nBlack\n(RepeatMasker:\t\t) 50 string cvs show\n"
+        for rclass in rm_color_map:
+                color = rm_color_map[rclass]
+                RM += "{}\n({}\t\t) 50 string cvs show\n".format(color, rclass)
+        RM += "Black\n"
 else:
 	RM = ""
 
@@ -347,35 +350,37 @@ def hex_to_rgb(h):
 	rgb = "{} {} {} setrgbcolor\n".format(rgb[0], rgb[1], rgb[2])
 	return(rgb)
 
-if(len(args.dm) > 0):
-	dms = []
-	for fdm in args.dm:
-		dms.append( pd.read_csv(fdm, delim_whitespace=True))
-		
-	dm = pd.concat(dms, ignore_index=True) 
-	if("qChr" in dm):
-		dm["chr"] = dm["qChr"]
-		dm["chrStart"] = dm["qStart"]
-		dm["chrEnd"] = dm["qEnd"]
-		dm["orient"] = dm["Orient"]
+if len(args.dm) > 0:
+    dms = []
+    for fdm in args.dm:
+        dms.append( pd.read_csv(fdm, delim_whitespace=True))
+            
+    dm = pd.concat(dms, ignore_index=True) 
+    if("qChr" in dm):
+        dm["chr"] = dm["qChr"]
+        dm["chrStart"] = dm["qStart"]
+        dm["chrEnd"] = dm["qEnd"]
+        dm["orient"] = dm["Orient"]
 
-	dm = dm[dm["chr"].isin(contigs.ctg)]
-	
-	dm.chrStart = dm.chrStart - args.start
-	dm.chrEnd = dm.chrEnd - args.start
-	dm = dm[dm.chrStart >= 0]
+    dm = dm[dm["chr"].isin(contigs.ctg)]
 
-	dm["y"] = dm["chr"].map(get_contig_num) + 0.08
-	dm["func"] = dm.orient.map(get_rm_end)
+    dm.chrStart = dm.chrStart - args.start
+    dm.chrEnd = dm.chrEnd - args.start
+    dm = dm[dm.chrStart >= 0]
+    
+    dm_offset=0.08
+    if(args.simple): dm_offset=0
+    dm["y"] = dm["chr"].map(get_contig_num) + dm_offset
+    dm["func"] = dm.orient.map(get_rm_end)
 
-	DM = ""
-	for idx, row in dm.iterrows():
-		if(row.chrEnd < get_contig_len( row["chr"] ) ):
-			DM += hex_to_rgb(row.color)
-			DM += "{} {} {} {}\n".format(row.y, row.chrStart, row.chrEnd, row.func)
-	DM += "Black\n"
+    DM = ""
+    for idx, row in dm.iterrows():
+        if row.chrEnd < get_contig_len( row["chr"] ) :
+            DM += hex_to_rgb(row.color)
+            DM += "{} {} {} {}\n".format(row.y, row.chrStart, row.chrEnd, row.func)
+    DM += "Black\n"
 else:
-	DM = ""
+    DM = ""
 
 #
 # Read in genes
@@ -389,28 +394,29 @@ def intersect(a1, a2, b1, b2):
 	return( a1 <= b2 and b1 <= a2 )
 
 def get_offset(a1,a2, gene, seen, ngenes):
-	rightmost = max(contigs["len"])
-	a2 = a2 + len(gene)*rightmost/100
-	ADDED=False
-	for offset in seen:
-		CANADD = True
-		for b1, b2 in seen[offset]:
-			if( intersect(a1,a2, b1,b2) ): CANADD = False
-		if(CANADD):
-			seen[offset].append((a1,a2))
-			ADDED = True
-			return(offset)	
+    rightmost = max(contigs["len"])
+    a2 = a2 + len(gene)*rightmost/100
+    ADDED=False
+    for offset in seen:
+        CANADD = True
+        for b1, b2 in seen[offset]:
+                if( intersect(a1,a2, b1,b2) ): CANADD = False
+        if(CANADD):
+                seen[offset].append((a1,a2))
+                ADDED = True
+                return(offset)
 
-	if(not ADDED):
-		off = 0.05 * len(seen) 
-		if(off < 1):
-			seen[off] = [(a1,a2)]
-			return(off)
-		else:
-			if(0.98 not in seen):
-				seen[0.98] = []
-			seen[0.98].append((a1,a2))
-			return(0.98)	
+    if(not ADDED):
+        off = 0.05 * len(seen)
+        if args.simple : off = 0.08 * len(seen)
+        if(off < 1):
+                seen[off] = [(a1,a2)]
+                return(off)
+        else:
+                if(0.98 not in seen):
+                        seen[0.98] = []
+                seen[0.98].append((a1,a2))
+                return(0.98)	
 
 if(len(args.bed) > 0):  
     beds = []
@@ -422,11 +428,15 @@ if(len(args.bed) > 0):
     bedall.sort_values(by=["chr", "name", "neglength"], inplace=True)
     bed = bedall.drop_duplicates(subset=["chr", "name"])
     bed = bed[bed["chr"].isin(contigs.ctg)]
-    bed["y"] = bed["chr"].map(get_contig_num) + 0.14
+    v_offset=0.14
+    if args.simple : v_offset = .40
+    bed["y"] = bed["chr"].map(get_contig_num) + v_offset
     bed["func"] = bed.strand.map(get_bed_end)
 
     # make font smaller
-    BED = "/Helvetica findfont 8 scalefont setfont\n"
+    BED = "/Helvetica findfont 6 scalefont setfont\n"
+    if args.simple : BED = "/Helvetica findfont 5 scalefont setfont\n"
+
     for contig_n, contig in bed.groupby("chr"):
         offset = 0; seen = {}; ngenes = len(contig.index)
         for name, group in contig.groupby("name"):
@@ -439,10 +449,11 @@ if(len(args.bed) > 0):
                                         offset = get_offset(min(starts), max(ends), name, seen, ngenes)
                                         #print(offset)		
                                         for start, end in zip(starts, ends): BED += "{} {} {} {}\n".format(row.y + offset , start, end, row.func)
-                                        BED += "{} {} {} {} draw_line\n".format(min(starts), row.y+offset+.01, max(ends), row.y+offset+.01 )
+                                        mid_line_offset = 0.01
+                                        if args.simple : mid_line_offset = 0.05
+                                        BED += "{} {} {} {} draw_line\n".format(min(starts), row.y+offset+mid_line_offset, max(ends), row.y+offset+mid_line_offset )
                                         BED += "{} {} ({}) printname_right_2\n".format( max(ends), row.y + offset, name)
-        #print(seen)	
-                    
+        #print(seen)	 
     # restore font size
     BED += "/Helvetica-Bold findfont 13 scalefont setfont\n"
 else:
@@ -457,11 +468,16 @@ cm_to_px = 28.3
 rightmost = max(contigs["len"])
 contig_count = len( contigs.index )
 print("CONTIG COUNT:{}".format(contig_count, file=sys.stderr))
-LEFT_MARGIN = 2 ; 
-BOT_MARGIN = 2 ; 
-GRAPH_MARGIN = 20 ;
+LEFT_MARGIN = 1 
+BOT_MARGIN = 2
+if args.simple : BOT_MARGIN = 1
+GRAPH_MARGIN = 20
+if(args.simple):
+    GRAPH_MARGIN=30
+
 NAME_MARGIN = 0.6 ;
 PAGE_LENGTH = 7 * ( contig_count ) ;
+if(args.simple): PAGE_LENGTH = 1.25*(contig_count)
 # Time to play with some fixed point arithmetic
 contig_stretch100 =int( ( rightmost * 100 )/ GRAPH_MARGIN );
 repeat_count = len(segs.index)
@@ -470,12 +486,12 @@ REP_WIDTH = 0.25;
 
 
 # add a scale
-SCALE_WIDTH = 0.1;                                                                                                                                                                                           
-SCALE_BELOW = -0.3;
+SCALE_WIDTH = 0.1
+SCALE_BELOW = -0.3
 SCALE_NUM_BELOW = -.5 #str( SCALE_WIDTH * SCALE_BELOW ) ;
-TICK_WIDTH = 0;
-SCALE_FONT_TYPE = "Helvetica";
-SCALE_FONT_SIZE = 7;
+TICK_WIDTH = 0
+SCALE_FONT_TYPE = "Helvetica"
+SCALE_FONT_SIZE = 7
 
 digits = len(str(rightmost))
 MAJ_SCALE_STEP = 10**(digits - 1)
@@ -483,7 +499,7 @@ if(MAJ_SCALE_STEP < 100):
     MAJ_SCALE_STEP = 100;
 MIN_SCALE_STEP = int( MAJ_SCALE_STEP / 10); 
 
-HEIGHT = int(PAGE_LENGTH * cm_to_px*1.2)
+HEIGHT = int( (PAGE_LENGTH+1) * cm_to_px )
 WIDTH = int( (GRAPH_MARGIN+2*LEFT_MARGIN) * cm_to_px*1.2)  
 
 # y postions from contig name

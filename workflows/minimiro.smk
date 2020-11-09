@@ -2,9 +2,7 @@ import os
 import sys
 import re
 import re
-import pandas as pd 
-
-
+import pandas as pd
 
 configfile: "minimiro.yaml"
 #SDIR=os.path.dirname(workflow.snakefile)
@@ -17,6 +15,13 @@ shell.prefix(f"source {SDIR}/env.cfg ; set -eo pipefail; ")
 SMS = list(config.keys())
 SEQS=["ref", "query"]
 SCORES=config["scores"];  SMS.remove("scores") # minimum peak dp socre 
+SIM = False
+if("simple" in config):
+  SIM = config["simple"];  SMS.remove("simple") # whether to use simple
+
+param_sim = ""
+if(SIM):
+  param_sim = " --simple "
 
 RS = {}
 RGNS = {}
@@ -82,35 +87,40 @@ def get_rc(wildcards):
 	return(RCS[SM])
 
 rule get_rgns:
-	input:
-		ref=get_ref, 
-		query=get_query,
-	output:
-		ref = tempd("temp/{SM}_ref.fasta"),
-		query = tempd("temp/{SM}_query.fasta"),
-	params:
-		rgns = get_ref_rgns,
-		qrgns = get_query_rgns,
-		rc = get_rc,
-	threads:1
-	run:
-		shell("samtools faidx {input.ref} {params.rgns} > {output.ref}")	
-		if(params["rc"]):
-			shell("samtools faidx {input.query} {params.qrgns} | seqtk seq -r - > {output.query}")	
-		else:	
-			shell("samtools faidx {input.query} {params.qrgns} > {output.query}")	
+  input:
+    ref=get_ref, 
+    query=get_query,
+  output:
+    ref = tempd("temp/{SM}_ref.fasta"),
+    query = tempd("temp/{SM}_query.fasta"),
+  params:
+    rgns = get_ref_rgns,
+    qrgns = get_query_rgns,
+    rc = get_rc,
+  threads:8
+  run:
+    shell("samtools faidx {input.ref} {params.rgns} > {output.ref}")	
+    shell("""
+            minimap2 -t {threads} -ax asm20 -r 200000 --eqx -Y \
+                {output.ref} <(samtools faidx {input.query} {params.qrgns}) | \
+                samtools view -F 2308 | \
+                awk '{{OFS="\\t"; print ">"$1"\\n"$10}}' - > {output.query} """)
+#if(params["rc"]):
+#			shell("samtools faidx {input.query} {params.qrgns} | seqtk seq -r - > {output.query}")	
+#		else:	
+#			shell("samtools faidx {input.query} {params.qrgns} > {output.query}")	
 
 rule RepeatMasker:
 	input:
 		fasta = "temp/{SM}_{SEQ}.fasta",
 	output:
 		out = tempd("temp/{SM}_{SEQ}.fasta.out"),
-		cat = tempd("temp/{SM}_{SEQ}.fasta.cat"),
+    #cat = tempd("temp/{SM}_{SEQ}.fasta.cat"),
 		tbl = tempd("temp/{SM}_{SEQ}.fasta.tbl"),
 		msk = tempd("temp/{SM}_{SEQ}.fasta.masked"),
 	resources:
 		mem=8,
-	threads:8
+	threads:16
 	shell:"""
 RepeatMasker \
 	-e ncbi \
@@ -127,7 +137,7 @@ rule DupMasker:
 		out = rules.RepeatMasker.output.out,
 	output:
 		dups = "temp/{SM}_{SEQ}.fasta.duplicons",
-	threads:8
+	threads:16
 	shell:"""
 DupMaskerParallel -pa {threads} -engine ncbi \
 	{input.fasta}
@@ -196,7 +206,7 @@ rule clean_gff:
             shell("touch {output.bed}")
         else:
             shell("""
-            gff3ToGenePred -geneNameAttr=gene_name -useName {output.tmpgff} /dev/stdout | \
+            gff3ToGenePred -warnAndContinue -geneNameAttr=gene_name -useName {output.tmpgff} /dev/stdout | \
                     genePredToBigGenePred /dev/stdin /dev/stdout | \
                     awk -F $'\t' '{{ t = $4; $4 = $13; $13 = t; print; }}' OFS=$'\t' | \
                     bedtools sort -i - > {output.bed} 
@@ -290,7 +300,8 @@ rule minimiro:
 {SDIR}/scripts/minimiro.py --paf {input.paf} \
 	--rm {input.rmout} \
 	--dm {input.dmout} \
-    --bed <(cut -f 1-12 {input.genes}) <(cut -f 1-12 {input.query_genes}) \
+  {param_sim} \
+    --bed <(cut -f 1-12 {input.genes} ) <(cut -f 1-12 {input.query_genes} ) \
 	--bestn 1000 \
 	-o {output.ps} && \
 	ps2pdf {output.ps} {output.pdf}

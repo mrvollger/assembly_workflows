@@ -7,7 +7,7 @@ import pandas as pd
 configfile: "minimiro.yaml"
 #SDIR=os.path.dirname(workflow.snakefile)
 SDIR=os.path.realpath(os.path.dirname(srcdir("env.cfg"))+"/..")
-
+MAXT=32
 DEBUG=True
 
 shell.prefix(f"source {SDIR}/env.cfg ; set -eo pipefail; ")
@@ -47,6 +47,8 @@ for SM in SMS:
 	if("bam" in config[SM]):
 		BAMS[SM] = config[SM]["bam"]
 
+workdir: "minimiro"
+
 wildcard_constraints:
 	SEQ="|".join(SEQS),
 	SM="|".join(SMS),
@@ -54,8 +56,8 @@ wildcard_constraints:
 
 rule all:
 	input:
-		pdf	= expand("minimiro_smk_out/{SM}_{SCORE}_aln.pdf", SM=SMS, SCORE=SCORES),
-		png	= expand("minimiro_smk_out/{SM}_coverage.png", SM=list(BAMS.keys())),
+		pdf	= expand("miro_figures/{SM}_{SCORE}_aln.pdf", SM=SMS, SCORE=SCORES),
+		png	= expand("miro_figures/{SM}_coverage.png", SM=list(BAMS.keys())),
 
 # delete if not debug
 def tempd(fname):
@@ -91,8 +93,8 @@ rule get_rgns:
     ref=get_ref, 
     query=get_query,
   output:
-    ref = tempd("temp/{SM}_ref.fasta"),
-    query = tempd("temp/{SM}_query.fasta"),
+    ref = tempd("temp_minimiro/{SM}_ref.fasta"),
+    query = tempd("temp_minimiro/{SM}_query.fasta"),
   params:
     rgns = get_ref_rgns,
     qrgns = get_query_rgns,
@@ -112,15 +114,15 @@ rule get_rgns:
 
 rule RepeatMasker:
 	input:
-		fasta = "temp/{SM}_{SEQ}.fasta",
+		fasta = "temp_minimiro/{SM}_{SEQ}.fasta",
 	output:
-		out = tempd("temp/{SM}_{SEQ}.fasta.out"),
-    #cat = tempd("temp/{SM}_{SEQ}.fasta.cat"),
-		tbl = tempd("temp/{SM}_{SEQ}.fasta.tbl"),
-		msk = tempd("temp/{SM}_{SEQ}.fasta.masked"),
+		out = tempd("temp_minimiro/{SM}_{SEQ}.fasta.out"),
+    #cat = tempd("temp_minimiro/{SM}_{SEQ}.fasta.cat"),
+		tbl = tempd("temp_minimiro/{SM}_{SEQ}.fasta.tbl"),
+		msk = tempd("temp_minimiro/{SM}_{SEQ}.fasta.masked"),
 	resources:
 		mem=8,
-	threads:16
+	threads: MAXT
 	shell:"""
 RepeatMasker \
 	-e ncbi \
@@ -133,11 +135,11 @@ RepeatMasker \
 
 rule DupMasker:
 	input:
-		fasta = "temp/{SM}_{SEQ}.fasta",
+		fasta = "temp_minimiro/{SM}_{SEQ}.fasta",
 		out = rules.RepeatMasker.output.out,
 	output:
-		dups = "temp/{SM}_{SEQ}.fasta.duplicons",
-	threads:16
+		dups = "temp_minimiro/{SM}_{SEQ}.fasta.duplicons",
+	threads: MAXT
 	shell:"""
 DupMaskerParallel -pa {threads} -engine ncbi \
 	{input.fasta}
@@ -148,7 +150,7 @@ rule DupMaskerColor:
 	input:
 		dups = rules.DupMasker.output.dups,
 	output:
-		dupcolor = "temp/{SM}_{SEQ}.fasta.duplicons.extra",
+		dupcolor = "temp_minimiro/{SM}_{SEQ}.fasta.duplicons.extra",
 	shell:"""
 {SDIR}/scripts/DupMask_parserV6.pl -i {input.dups} -E -o {output.dupcolor}
 """
@@ -177,10 +179,10 @@ rule clean_gff:
         ref = get_ref,
         gff = get_gff,
     output:
-        gff = temp("temp/{SM}.small.gff"),
-        tmpgff = temp("temp/{SM}.tmpsmall.gff"),
-        rgns = temp("temp/{SM}.rgns.bed"),
-        bed = temp("temp/{SM}.small.bed"),
+        gff = temp("temp_minimiro/{SM}.small.gff"),
+        tmpgff = temp("temp_minimiro/{SM}.tmpsmall.gff"),
+        rgns = temp("temp_minimiro/{SM}.rgns.bed"),
+        bed = temp("temp_minimiro/{SM}.small.bed"),
     params:
         bed = get_ref_bed,
     threads: 8
@@ -216,8 +218,8 @@ rule get_ref_genes:
     input:
         bed = rules.clean_gff.output.bed,
     output:
-        bed12 = "temp/{SM}.ref.genes.12.bed",
-        tmp = temp("temp/tmp.{SM}.ref.genes.bed"),
+        bed12 = "temp_minimiro/{SM}.ref.genes.12.bed",
+        tmp = temp("temp_minimiro/tmp.{SM}.ref.genes.bed"),
     params:
         bed = get_ref_bed,
     run:
@@ -275,7 +277,7 @@ rule minimap2:
 		ref = rules.get_rgns.output.ref,
 		query = rules.get_rgns.output.query,
 	output:
-		paf = tempd("temp/{SM}_{SCORE}_aln.paf"),
+		paf = tempd("temp_minimiro/{SM}_{SCORE}_aln.paf"),
 	params:
 		score = get_score,
 	threads: 16
@@ -288,13 +290,13 @@ minimap2 -x asm20 -r 200000 -s {params.score} -p 0.01 -N 1000 --cs {input.ref} {
 rule minimiro:
     input:
         paf = rules.minimap2.output.paf,
-        rmout = expand("temp/{{SM}}_{SEQ}.fasta.out", SEQ=SEQS),
-        dmout = expand("temp/{{SM}}_{SEQ}.fasta.duplicons.extra", SEQ=SEQS),
+        rmout = expand("temp_minimiro/{{SM}}_{SEQ}.fasta.out", SEQ=SEQS),
+        dmout = expand("temp_minimiro/{{SM}}_{SEQ}.fasta.duplicons.extra", SEQ=SEQS),
         genes = rules.get_ref_genes.output.bed12,
         query_genes = rules.query_genes.output.bed12,
     output:
-        ps	= "temp/{SM}_{SCORE}_aln.ps",
-        pdf	= "minimiro_smk_out/{SM}_{SCORE}_aln.pdf",
+        ps	= "temp_minimiro/{SM}_{SCORE}_aln.ps",
+        pdf	= "miro_figures/{SM}_{SCORE}_aln.pdf",
     threads: 1
 	shell:"""
 {SDIR}/scripts/minimiro.py --paf {input.paf} \
@@ -315,7 +317,7 @@ rule coverage:
 	input:
 		bam = get_bam,
 	output:
-		png	= "minimiro_smk_out/{SM}_coverage.png",
+		png	= "miro_figures/{SM}_coverage.png",
 	params:
 		rgn = get_query_rgns, 
 	threads: 1

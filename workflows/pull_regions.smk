@@ -1,11 +1,12 @@
+import os
 import pandas as pd
 import networkx as nx
 import pysam
 
 df = pd.read_csv("Master_SD_freeze.tbl", sep="\t")
-REF="../../assemblies_for_anlysis/unzipped/CHM13.pri.fa"
-GFF="../../Assembly_analysis/Liftoff/chm13.draft_v1.0_plus38Y.gff3"
-flank=50000
+REF=os.path.abspath("../../assemblies_for_anlysis/unzipped/CHM13.pri.fa")
+GFF=os.path.abspath("../../Assembly_analysis/Liftoff/chm13.draft_v1.0_plus38Y.gff3")
+FLANK=50000
 #df = df[(df.hap != "pri") & (df.hap != "alt")]
 df = df[(df.hap != "alt")]
 df.set_index(["sample","hap"], inplace=True)
@@ -14,6 +15,8 @@ regions.set_index("name", inplace=True)
 sms, haps = zip(*df.index.values)
 rgns = list(regions.index.values)
 haps=set(haps)
+
+workdir: "pull_sd_regions"
 
 def get_bed(wc):
   x=df.loc[(wc.sm, wc.h)].all_bed
@@ -83,8 +86,8 @@ print(regions)
 def get_rgn(wc):
   x = regions.loc[wc.r]
   rgn = "{}:{}-{}".format(x.chr, x.start, x.end)
-  f1 = "{}:{}-{}".format(x.chr, x.start - flank, x.start)
-  f2 = "{}:{}-{}".format(x.chr, x.end, x.end + flank)
+  f1 = "{}:{}-{}".format(x.chr, x.start - FLANK, x.start)
+  f2 = "{}:{}-{}".format(x.chr, x.end, x.end + FLANK)
   return(f1 + " " + f2)
 
 
@@ -164,9 +167,9 @@ rule region_fasta:
   shell:"""
 cat {input.fasta} > {output.tmp}
 samtools faidx {output.tmp}
-minimap2 -D -ax asm20 --secondary=no --eqx -Y -t {threads} \
+minimap2 -X -r 50000 -ax asm20 -m {FLANK} -s {FLANK} --eqx -Y -t {threads} \
           {output.tmp} {output.tmp} \
-          | samtools view -F 2308 -b - | samtools sort \
+          | samtools view -F 4 -b - | samtools sort -m 4G -@ {threads} \
           | samIdentity.py --header /dev/stdin > {output.tbl}
 """
 
@@ -200,7 +203,7 @@ rule simple_fasta:
       yaml = "combined/{r}.simple.yaml",
   run:
     df = pd.read_csv(input.tbl, sep="\t")
-    e = df[(df.perID_by_all > 98) & ((df.query_end-df.query_start)/df.query_length > 0.9)
+    e = df[(df.perID_by_all > 99) & ((df.query_end-df.query_start)/df.query_length > 0.9)
             & ~df.query_name.str.contains("CHM13|GRCh38")
             & ~df.reference_name.str.contains("CHM13|GRCh38")]
     
@@ -228,7 +231,7 @@ rule simple_fasta:
     shell("samtools faidx {output.fasta}")
     
     row = regions.loc[wildcards.r]
-    r = "{}:{}-{}".format(row.chr, row.start-flank, row.end+flank)
+    r = "{}:{}-{}".format(row.chr, row.start-FLANK, row.end+FLANK)
     ctgs = sort_ctgs(ctgs)
     q="\n    - ".join(ctgs)
     z=f"""
@@ -237,7 +240,7 @@ rule simple_fasta:
   gff: {GFF}
   regions:
     - {r}
-  query: {output.fasta}
+  query: {os.path.abspath(output.fasta)}
   queryregions:
     - {q}
 

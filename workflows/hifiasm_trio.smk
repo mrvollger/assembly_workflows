@@ -15,7 +15,7 @@ shell.prefix("source {ENV}; set -eo pipefail; ")
 SMS=list(config.keys())
 
 
-df = pd.read_csv("samples_trio.tbl", sep="\t")
+df = pd.read_csv("samples_trio.tbl", sep="\s+")
 df.replace(np.nan, '', regex=True, inplace=True)
 PARENTS = ["pat", "mat"]
 config={}
@@ -32,6 +32,8 @@ for idx, row in df.iterrows():
 SMS = list(config.keys())
 
 print(SMS)
+
+print(config)
 
 wildcard_constraints:
 	SM= "|".join(SMS),

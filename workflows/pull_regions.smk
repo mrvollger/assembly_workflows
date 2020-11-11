@@ -48,9 +48,6 @@ rule all:
     f=get_all,
     simple = expand("combined/{r}.simple.fasta", r=rgns),
     yaml = "minimiro.yaml"
-#   models = expand("temp/{sm}.{h}.tbl", sm = sms, h = haps),
-#paf=expand("temp/{sm}.{h}.{r}.paf", sm=sms, h=haps, r=rgns),
-#   f=expand("temp/{sm}.{h}.{r}.fasta", sm=sms, h=haps, r=rgns),
   run:
       shell("mkdir -p combined")
       for rgn in rgns:

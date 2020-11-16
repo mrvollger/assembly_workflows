@@ -41,7 +41,7 @@ wildcard_constraints:
 
 workdir: "hifiasm_out"
 
-MAXT=32
+MAXT = config.get('threads', 64)
 TMP = "/tmp/mvollger/hifi_asm"
 shell("mkdir -p {TMP} logs")
 

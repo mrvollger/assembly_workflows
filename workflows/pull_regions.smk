@@ -4,11 +4,12 @@ import networkx as nx
 import pysam
 
 df = pd.read_csv("Master_SD_freeze.tbl", sep="\t")
-REF=os.path.abspath("../../assemblies_for_anlysis/unzipped/CHM13.pri.fa")
-GFF=os.path.abspath("../../Assembly_analysis/Liftoff/chm13.draft_v1.0_plus38Y.gff3")
+CHM13D="/net/eichler/vol26/projects/chm13_t2t/nobackups"
+REF=os.path.abspath(f"{CHM13D}/assemblies_for_anlysis/unzipped/CHM13.pri.fa")
+GFF=os.path.abspath(f"{CHM13D}/Assembly_analysis/Liftoff/chm13.draft_v1.0_plus38Y.gff3")
 FLANK=50000
 #df = df[(df.hap != "pri") & (df.hap != "alt")]
-df = df[(df.hap != "alt")]
+#df = df[(df.hap != "alt")]
 df.set_index(["sample","hap"], inplace=True)
 regions = pd.read_csv("regions.bed", header=None,sep="\t", names=["chr", "start","end","name"])
 regions.set_index("name", inplace=True)
@@ -82,11 +83,14 @@ minimap2 -ax splice --eqx -s 500 -p .3 -f 0 -N 1000 -r 150000 {output.fasta} {ou
 print(regions)
 def get_rgn(wc):
   x = regions.loc[wc.r]
-  rgn = "{}:{}-{}".format(x.chr, x.start, x.end)
   f1 = "{}:{}-{}".format(x.chr, x.start - FLANK, x.start)
   f2 = "{}:{}-{}".format(x.chr, x.end, x.end + FLANK)
   return(f1 + " " + f2)
 
+def get_whole_rgn(wc):
+  x = regions.loc[wc.r]
+  rgn = "{}:{}-{}".format(x.chr, x.start - FLANK, x.end + FLANK)
+  return(rgn)
 
 MM_OPTS=" -r 50000 -x asm20 -z 10000 -s 25000 "
 rule index:
@@ -108,7 +112,9 @@ rule get_rgn:
   threads: 4
   shell:"""
 minimap2 {MM_OPTS} -2 --secondary=no --eqx -Y -t {threads} \
-  {input.mmi} <(samtools faidx {input.ref} {params.rgn}) > {output.paf}
+  {input.mmi} \
+  <(samtools faidx {input.ref} {params.rgn})\
+  > {output.paf}
 """
 
 def get_dist(wc):
@@ -120,16 +126,25 @@ rule pull_fasta:
   input:
     paf = rules.get_rgn.output.paf,
     fasta=get_fasta,
+    ref=REF,
   output:
     bed="temp/{sm}.{h}.{r}.bed",
     fasta="temp/{sm}.{h}.{r}.fasta",
   params:
     dist=get_dist,
+    rgn=get_whole_rgn,
   shell:"""
 awk  '{{print $6"\t"$8"\t"$9"\t"$1"_"$6"\t"$3"\t"$4}}' {input.paf} | \
-      bedtools sort -i - | bedtools merge -d {params.dist} -i - | bedtools slop -i - -g {input.fasta}.fai -b 50000  \
+      bedtools sort -i - | bedtools merge -d {params.dist} -i - | bedtools slop -i - -g {input.fasta}.fai -b {FLANK} \
       > {output.bed}
-bedtools getfasta -fi {input.fasta} -bed {output.bed} > {output.fasta}
+
+minimap2 -t {threads} -ax asm20 -r 200000 --eqx -Y \
+  <(samtools faidx {input.ref} {params.rgn})\
+  <(bedtools getfasta -fi {input.fasta} -bed {output.bed}) | \
+  samtools view -F 2308 | \
+  awk '{{OFS="\\t"; print ">"$1"\\n"$10}}' - | \
+  seqtk seq -l 60 > {output.fasta} 
+
 """
 
 

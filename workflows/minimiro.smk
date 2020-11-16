@@ -7,17 +7,17 @@ import pandas as pd
 configfile: "minimiro.yaml"
 #SDIR=os.path.dirname(workflow.snakefile)
 SDIR=os.path.realpath(os.path.dirname(srcdir("env.cfg"))+"/..")
-MAXT=32
+MAXT=24
 DEBUG=True
 
 shell.prefix(f"source {SDIR}/env.cfg ; set -eo pipefail; ")
 
-SMS = list(config.keys())
 SEQS=["ref", "query"]
-SCORES=config["scores"];  SMS.remove("scores") # minimum peak dp socre 
-SIM = False
-if("simple" in config):
-  SIM = config["simple"];  SMS.remove("simple") # whether to use simple
+SCORES = config.pop("scores", [1000])
+SIM = config.pop("simple", False)
+GENES = config.pop("genes", True)
+SMS = list(config.keys())
+print(SMS)
 
 param_sim = ""
 if(SIM):
@@ -105,8 +105,11 @@ rule get_rgns:
     shell("""
             minimap2 -t {threads} -ax asm20 -r 200000 --eqx -Y \
                 {output.ref} <(samtools faidx {input.query} {params.qrgns}) | \
-                samtools view -F 2308 | \
-                awk '{{OFS="\\t"; print ">"$1"\\n"$10}}' - > {output.query} """)
+                samtools view -F 2304 | \
+                awk '{{OFS="\\t"; print ">"$1"\\n"$10}}' - | \
+                seqtk seq -l 60 > {output.query} """)
+    shell("samtools faidx {output.query}")
+    shell("samtools faidx {output.ref}")
 #if(params["rc"]):
 #			shell("samtools faidx {input.query} {params.qrgns} | seqtk seq -r - > {output.query}")	
 #		else:	
@@ -141,6 +144,7 @@ rule DupMasker:
 		dups = "temp_minimiro/{SM}_{SEQ}.fasta.duplicons",
 	threads: MAXT
 	shell:"""
+samtools faidx {input.fasta}
 DupMaskerParallel -pa {threads} -engine ncbi \
 	{input.fasta}
 """
@@ -263,7 +267,7 @@ rule query_genes:
                     ref={input.ref} \
                     gff=$(readlink -f {input.gff}) \
                     sample={wildcards.SM} \
-                --nolock""")
+                --nolock || touch {output.bed12}""")
 
 
 #
@@ -286,6 +290,9 @@ rule minimap2:
 minimap2 -x asm20 -r 200000 -s {params.score} -p 0.01 -N 1000 --cs {input.ref} {input.query} > {output.paf}
 """
 
+param_genes = ""
+if(GENES):
+  param_genes = " --bed <(cut -f 1-12 {input.genes} ) <(cut -f 1-12 {input.query_genes} ) "
 
 rule minimiro:
     input:
@@ -303,7 +310,7 @@ rule minimiro:
 	--rm {input.rmout} \
 	--dm {input.dmout} \
   {param_sim} \
-    --bed <(cut -f 1-12 {input.genes} ) <(cut -f 1-12 {input.query_genes} ) \
+  {param_genes} \
 	--bestn 1000 \
 	-o {output.ps} && \
 	ps2pdf {output.ps} {output.pdf}

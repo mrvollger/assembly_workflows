@@ -3,15 +3,18 @@ import pandas as pd
 import networkx as nx
 import pysam
 
-df = pd.read_csv("Master_SD_freeze.tbl", sep="\t")
+df = pd.read_csv("Master_SD_freeze.tbl", sep="\t", comment="#")
 CHM13D="/net/eichler/vol26/projects/chm13_t2t/nobackups"
 REF=os.path.abspath(f"{CHM13D}/assemblies_for_anlysis/unzipped/CHM13.pri.fa")
+FAI=os.path.abspath(f"{CHM13D}/assemblies_for_anlysis/unzipped/CHM13.pri.fa.fai")
 GFF=os.path.abspath(f"{CHM13D}/Assembly_analysis/Liftoff/chm13.draft_v1.0_plus38Y.gff3")
 FLANK=50000
+RMFLANK=FLANK-2000
+RMFLANK=0
 #df = df[(df.hap != "pri") & (df.hap != "alt")]
 #df = df[(df.hap != "alt")]
 df.set_index(["sample","hap"], inplace=True)
-regions = pd.read_csv("regions.bed", header=None,sep="\t", names=["chr", "start","end","name"])
+regions = pd.read_csv("regions.bed", header=None,sep="\t", names=["chr", "start","end","name"], comment="#")
 regions.set_index("name", inplace=True)
 sms, haps = zip(*df.index.values)
 rgns = list(regions.index.values)
@@ -49,11 +52,11 @@ rule all:
     f=get_all,
     simple = expand("combined/{r}.simple.fasta", r=rgns),
     yaml = "minimiro.yaml"
-  run:
-      shell("mkdir -p combined")
-      for rgn in rgns:
-        shell("cat pulled_fastas/{rgn}*fasta > combined/{rgn}.fasta")
-        shell("samtools faidx combined/{rgn}.fasta")
+#run:
+#     shell("mkdir -p combined")
+#     for rgn in rgns:
+#       shell("cat pulled_fastas/{rgn}*fasta > combined/{rgn}.fasta")
+#       shell("samtools faidx combined/{rgn}.fasta")
 
 rule get_gene:
   input:
@@ -92,7 +95,7 @@ def get_whole_rgn(wc):
   rgn = "{}:{}-{}".format(x.chr, x.start - FLANK, x.end + FLANK)
   return(rgn)
 
-MM_OPTS=" -r 50000 -x asm20 -z 10000 -s 25000 "
+MM_OPTS=f" -r 50000 -x asm20 -z 10000 -s {int(FLANK/2)} "
 rule index:
   input:
     fasta=get_fasta,
@@ -135,10 +138,11 @@ rule pull_fasta:
     rgn=get_whole_rgn,
   shell:"""
 awk  '{{print $6"\t"$8"\t"$9"\t"$1"_"$6"\t"$3"\t"$4}}' {input.paf} | \
-      bedtools sort -i - | bedtools merge -d {params.dist} -i - | bedtools slop -i - -g {input.fasta}.fai -b {FLANK} \
+      bedtools sort -i - | bedtools merge -d {params.dist} -i - | \
+      bedtools slop -i - -g {input.fasta}.fai -b -{RMFLANK} \
       > {output.bed}
 
-minimap2 -t {threads} -ax asm20 -r 200000 --eqx -Y \
+minimap2 -t {threads} -m 10000 -ax asm20 -r 200000 --eqx -Y \
   <(samtools faidx {input.ref} {params.rgn})\
   <(bedtools getfasta -fi {input.fasta} -bed {output.bed}) | \
   samtools view -F 2308 | \
@@ -146,7 +150,6 @@ minimap2 -t {threads} -ax asm20 -r 200000 --eqx -Y \
   seqtk seq -l 60 > {output.fasta} 
 
 """
-
 
 
 rule good_fasta:
@@ -168,6 +171,10 @@ rule good_fasta:
       o.write("")
     o.close()
 
+def get_minscore(wc):
+  x = regions.loc[wc.r]
+  total = x.end - x.start 
+  return(max(FLANK-RMFLANK, int(total/3)))
 
 rule region_fasta:
   input:
@@ -175,14 +182,16 @@ rule region_fasta:
   output:
       tbl = "combined/{r}.tbl",
       tmp = "combined/{r}.tmp",
-  threads: 16
+  params:
+      minscore = get_minscore,
+  threads: 32
   shell:"""
 cat {input.fasta} > {output.tmp}
 samtools faidx {output.tmp}
-minimap2 -X -r 50000 -ax asm20 -m {FLANK} -s {FLANK} --eqx -Y -t {threads} \
+minimap2 -r 50000 -ax asm20 -s {params.minscore} --eqx -Y -t {threads} \
           {output.tmp} {output.tmp} \
-          | samtools view -F 4 -b - | samtools sort -m 4G -@ {threads} \
-          | samIdentity.py --header /dev/stdin > {output.tbl}
+         | samtools view -F 4 -b - | samtools sort -@ {threads} - \
+         | samIdentity.py --header /dev/stdin > {output.tbl}
 """
 
 def sort_ctgs(ctgs, extra=True):
@@ -204,6 +213,7 @@ def sort_ctgs(ctgs, extra=True):
     human.sort()
   other.sort()
   return(first+human+other)
+
 
 rule simple_fasta:
   input:

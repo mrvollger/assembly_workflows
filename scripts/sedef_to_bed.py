@@ -76,7 +76,7 @@ if __name__ == "__main__":
         df2[["chr2", "start2", "end2"]] = df[["chr1", "start1", "end1"]]
         df2["strand2"] = df["strand1"]
         df2["strand1"] = df["strand2"]
-        df["original"] = False
+        df2["original"] = False
         df = pd.concat([df,df2], ignore_index=True)
 
     # make bed 9 format for the browser

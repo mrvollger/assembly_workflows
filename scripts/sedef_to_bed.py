@@ -21,9 +21,15 @@ def get_color(x):
 
 
 SEDEF_HEADER = "chr1   start1  end1    chr2    start2  end2    name    score   strand1 strand2 max_len aln_len comment aln_len.1 indel_a indel_b alnB    matchB  mismatchB   transitionsB     transversions   fracMatch       fracMatchIndel  jck     k2K     aln_gaps        uppercaseA      uppercaseB      uppercaseMatches        aln_matches  aln_mismatches  aln_gaps.1        aln_gap_bases   cigar   filter_score".strip().split()
-SEDEF_HEADER = "chr1   start1  end1    chr2    start2  end2    name    score   strand1 strand2 max_len aln_len comment indel_a indel_b alnB    matchB  mismatchB   transitionsB     transversions   fracMatch       fracMatchIndel  jck     k2K     aln_gaps        uppercaseA      uppercaseB      uppercaseMatches        aln_matches  aln_mismatches  aln_gaps.1        aln_gap_bases   cigar   filter_score    count_ovls      sat_bases       total_bases     sat_coverage".strip().split()
+SEDEF_HEADER = """chr1   start1  end1    chr2    start2  end2
+name    score   strand1 strand2 max_len aln_len
+comment indel_a indel_b alnB    matchB  mismatchB
+transitionsB     transversions   fracMatch       fracMatchIndel  jck     k2K
+aln_gaps        uppercaseA      uppercaseB      uppercaseMatches        aln_matches  aln_mismatches
+aln_gaps.1        aln_gap_bases   cigar   filter_score    count_ovls      sat_bases
+total_bases     sat_coverage""".strip().split()
 DROP = ["aln_len.1", "aln_gaps.1", "cigar", "comment"]
-DROP = ["aln_gaps.1", "cigar", "comment",     "count_ovls", "total_bases", "sat_coverage"]
+DROP = ["aln_gaps.1", "comment",     "count_ovls", "total_bases", "sat_coverage"]
 
 # global var for inputs
 args=None 
@@ -40,36 +46,51 @@ if __name__ == "__main__":
     parser.add_argument("--sat", help="Remove dups that are this fraction of sat or more", type=float, default=0.70)
     parser.add_argument('-d', help="store args.d as true if -d",  action="store_true", default=False)
     args = parser.parse_args()
-
+    
+    # read in the segdups 
     df =pd.read_csv(args.infile, sep="\t", names=SEDEF_HEADER, header=None, comment="#")
+
     # filter out high sat regions
     df = df[df.sat_coverage <= args.sat]
-
+    
+    # remove extra columns
     df.drop(DROP, axis=1, inplace=True)
-    #print(df.shape, sum( df["aln_gaps.1"] == df["aln_gaps"]), sum(df.aln_len == df["aln_len"]) )
+    
+    # remove duplicate SDs and keep only the best alignment
+    dup_cols = ["chr1", "start1", "end1", "chr2", "start2", "end2"]
+    df.sort_values(by=dup_cols+["matchB"], inplace=True)
+    df.drop_duplicates(subset=dup_cols, inplace=True, keep="last")
+
+    # add a color for the browser
     df["color"] = df.fracMatch.map(get_color)
 
-    # make the symetric ones
-    if(args.symetric):
-            df2 = df.copy()
-            df2[["chr1", "start1", "end1"]] = df[["chr2", "start2", "end2"]]
-            df2[["chr2", "start2", "end2"]] = df[["chr1", "start1", "end1"]]
-            df2["strand2"] = df["strand1"]
-            df2["strand1"] = df["strand2"]
-            df = pd.concat([df,df2], ignore_index=True)
+    # add a unique duplication identifier
+    df["unique_id"] = list(range(df.shape[0]))
+    df["original"] = True
 
-    # make bed 9 format for the browser 
+
+    # make the symetric SDs so that there is evidence at both locations
+    if args.symetric :
+        df2 = df.copy()
+        df2[["chr1", "start1", "end1"]] = df[["chr2", "start2", "end2"]]
+        df2[["chr2", "start2", "end2"]] = df[["chr1", "start1", "end1"]]
+        df2["strand2"] = df["strand1"]
+        df2["strand1"] = df["strand2"]
+        df["original"] = False
+        df = pd.concat([df,df2], ignore_index=True)
+
+    # make bed 9 format for the browser
     df.sort_values(by=["chr1", "start1"], inplace=True)
     bed9 = ["chr1", "start1", "end1", "name", "fakeScore", "strand1", "start1", "end1", "color"]
     df["name"] = df.chr2 + ":" + df.start2.astype(str) + "-" + df.end2.astype(str)
     df["fakeScore"] = 0
-    extra = [ col for col in SEDEF_HEADER if col not in bed9 and col not in DROP]
+    extra = [ col for col in SEDEF_HEADER if col not in bed9 and col not in DROP] + ["unique_id", "original"]
     df = df[bed9 + extra]
     df.rename(columns={"chr1":"#chr1"}, inplace=True)
 
     cond = (df.aln_len >= args.minlength) & (df.fracMatch >= args.minidentity) & (df.fracMatchIndel >= args.minindelidentity)
-    sd = df.loc[cond] 
-    filt = df.loc[~cond] 
+    sd = df.loc[cond]
+    filt = df.loc[~cond]
     sd.to_csv(args.output, index=False, sep="\t")
     filt.to_csv(args.filt, index=False, sep="\t")
 

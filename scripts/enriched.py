@@ -21,7 +21,7 @@ def dseg(s, S, D, chrm, minlen):
             if (mmax >= S):
                 #print("{}\t{}\t{}\t".format(start, end, mmax) )
                 if(end-start > minlen):
-                    print(chrm,start, end, mmax)
+                    print(chrm, start, end, mmax)
             mmax = 0 
             cumul = 0 
             start = i 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
    
     for chrm, region in bed.groupby("chr"):
         s = np.zeros( fai.chrlen[chrm], dtype=np.int8); s[:]=-1
-        sys.stderr.write(chrm+"\n")
+        sys.stderr.write("\r" + chrm)
         for row in region.itertuples():
             s[row.start:row.end]=args.scale
             continue

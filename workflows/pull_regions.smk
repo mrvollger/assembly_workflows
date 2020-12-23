@@ -3,7 +3,10 @@ import pandas as pd
 import networkx as nx
 import pysam
 
-df = pd.read_csv("Master_SD_freeze.tbl", sep="\t", comment="#")
+table = "Master.tbl"
+if os.path.exists("Master_SD_freeze.tbl"):
+  table = "Master_SD_freeze.tbl"
+df = pd.read_csv(table, sep="\t", comment="#")
 CHM13D="/net/eichler/vol26/projects/chm13_t2t/nobackups"
 REF=os.path.abspath(f"{CHM13D}/assemblies_for_anlysis/unzipped/CHM13.pri.fa")
 FAI=os.path.abspath(f"{CHM13D}/assemblies_for_anlysis/unzipped/CHM13.pri.fa.fai")

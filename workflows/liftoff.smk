@@ -19,11 +19,15 @@ shell.prefix(f"source {SDIR}/env.cfg ; set -eo pipefail; ")
 #
 # hg38 information
 #
-#if("ref" not in config and "gff" not in config)
-FTP = FTPRemoteProvider()
-HTTP = HTTPRemoteProvider()
-GRCH38=HTTP.remote("https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.39_GRCh38.p13/GRCh38_major_release_seqs_for_alignment_pipelines/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz")
-RGFF=FTP.remote("ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_34/gencode.v34.annotation.gff3.gz")
+if "ref" not in config or "gff" not in config:
+    FTP = FTPRemoteProvider()
+    HTTP = HTTPRemoteProvider()
+    GRCH38=HTTP.remote("https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.39_GRCh38.p13/GRCh38_major_release_seqs_for_alignment_pipelines/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz")
+    RGFF=FTP.remote("ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_34/gencode.v34.annotation.gff3.gz")
+else:
+    GRCH38 = ""
+    RGFF = ""
+  
 
 
 
@@ -98,7 +102,7 @@ localrules: run_liftoff
 
 rule get_hg38:
 	input:
-		fasta = GRCH38,
+		fasta = ancient(GRCH38),
 	output:
 		fasta = REF,
 		fai = REF+'.fai',
@@ -112,7 +116,7 @@ samtools faidx {output.fasta}
 
 rule get_gff:
 	input:
-		gff = RGFF,
+		gff = ancient(RGFF),
 	output:
 		gff = GFF,
 	threads: 1

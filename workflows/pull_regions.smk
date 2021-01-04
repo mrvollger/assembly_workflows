@@ -230,7 +230,7 @@ samtools faidx {output.tmp}
 minimap2 -r 50000 -ax asm20 -s {params.minscore} --eqx -Y -t {threads} \
           {output.tmp} {output.tmp} \
          | samtools view -F 4 -b - | samtools sort -@ {threads} - \
-         | samIdentity.py --header /dev/stdin > {output.tbl}
+         | ~mvollger/projects/utility/samIdentity.py --header /dev/stdin > {output.tbl}
 """
 
 def sort_ctgs(ctgs, extra=True):

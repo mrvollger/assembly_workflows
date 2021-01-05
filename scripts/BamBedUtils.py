@@ -5,6 +5,8 @@ A module for bed and bam operations
 from numba import njit
 import numpy as np
 import sys
+import pandas as pd
+from pandas.api.types import CategoricalDtype
 M=0 #M  BAM_CMATCH      0
 I=1 #I  BAM_CINS        1
 D=2 #D  BAM_CDEL        2
@@ -40,13 +42,40 @@ def sd_or_intersect(qrow, trow1, trow2):
     """
     does qrow overlap either side of the SD
     """
-    return intersect(qrow, trow1) or intersect(qrow, trow2)
+    return intersect(qrow[0], qrow[1], qrow[2],
+                     trow1[0], trow1[1], trow1[2]) or intersect(qrow[0], qrow[1], qrow[2],
+                                                                trow2[0], trow2[1], trow2[2])
+
+@njit
+def np_or_intersect(qrow, array):
+    """
+    intersect with numpy array:
+    """
+    rtn = []
+    #array = np.array(array, dtype=np.uint32)
+    for i in range(array.shape[0]):
+        trow=array[i]
+        rtn.append(sd_or_intersect(qrow, trow[0:3], trow[3:6]))
+    return rtn
+
+def df_intersect(qrow, df):
+    a,a0,a1=qrow
+    return (a == df.iloc[:, 0]) & (a1 >= df.iloc[:, 1]) & (df.iloc[:, 2] >= a0)
 
 def df_or_intersect(qrow, df):
     """
     check if qrow intersect with the first three columns or the next three
     """
-    return df.apply(lambda x: sd_or_intersect(qrow, df.iloc[:, 0:3], df.iloc[:, 3:6]), axis=1)
+    c1 = df_intersect(qrow, df.iloc[:, 0:3])
+    c2 = df_intersect(qrow, df.iloc[:, 0:3])
+    return c1 | c2
+
+def df_df_intersect(qdf, df):
+    """
+    intersect two dataframes for overlap
+    """
+    overlaps = qdf.apply(lambda x: df_intersect(x[0:3], df), axis=1).T
+    return overlaps.sum(axis=1) & 1
 
 @njit
 def intersect_list(a_chrs, a_starts, a_ends, b_chr, b_start, b_end):
@@ -93,7 +122,7 @@ def parse_cigar(cigar_s):
     B=9 #B  BAM_CBACK       9
     NM=10 #NM       NM tag  10
     """
-    digits = [str(i) for i in range(10)]
+    digits = ["0","1","2","3","4","5","6","7","8","9"]#[str(i) for i in range(10)]
     i=0
     cigar = []
     while i < len(cigar_s):

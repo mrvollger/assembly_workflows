@@ -123,37 +123,6 @@ cat {output.tmp} >> {output.bed}
 sed -i '1{{s/$/\tcount_ovls\tsat_bases\ttotal_bases\tsat_coverage/}}' {output.bed}
 """
 
-rule sedef_browser:
-	input:
-		bed = rules.count_sat_sedef.output.bed,
-	output:
-		bed = f"SEDEF/{SM}.SDs.bed",
-		lowid = f"SEDEF/{SM}.SDs.lowid.bed",
-		html = f"SEDEF/{SM}.SDs.html",
-	resources:
-		mem=8,
-	threads: 1
-	run:
-		html = open(f"{SDIR}/templates/sedef.html").read()
-		open(output["html"], "w+").write(html.format(DATE=DATE, SM=SM))
-		shell("{SDIR}/scripts/sedef_to_bed.py --sat 0.70 {input.bed} {output.bed} {output.lowid}")
-
-rule sedef_bb:
-    input:
-        bed = rules.sedef_browser.output.bed,
-        lowid = rules.sedef_browser.output.lowid,
-        fai = FASTA + ".fai",
-    output:
-        bb = rules.sedef_browser.output.bed + ".bb",
-        lowid = rules.sedef_browser.output.lowid+".bb",
-    resources:
-        mem=8,
-    threads: 1
-    shell:"""
-bedToBigBed -type=bed9+27 -tab -as={SDIR}/templates/sedef.as {input.bed} {input.fai} {output.bb}
-bedToBigBed -type=bed9+27 -tab -as={SDIR}/templates/sedef.as {input.lowid} {input.fai} {output.lowid}
-"""
-
 
 rule find_cen:
     input:
@@ -175,6 +144,44 @@ grep 'ALR/Alpha' {input.rm} | \
         sort -k 1,1 -k4,4n > {output.tmp} 
 
 bedtools groupby -g 1 -c 2,3 -o last,last -i {output.tmp} > {output.bed} 
+"""
+
+rule sedef_browser:
+  input:
+    bed = rules.count_sat_sedef.output.bed,
+    fai = FASTA + ".fai",
+    cen = rules.find_cen.output.bed,
+  output:
+    bed = f"SEDEF/{SM}.SDs.bed",
+    lowid = f"SEDEF/{SM}.SDs.lowid.bed",
+    html = f"SEDEF/{SM}.SDs.html",
+  resources:
+    mem=8,
+  threads: 1
+  run:
+    html = open(f"{SDIR}/templates/sedef.html").read()
+    open(output["html"], "w+").write(html.format(DATE=DATE, SM=SM))
+    shell("""
+{SDIR}/scripts/sedef_to_bed.py \
+  --fai {input.fai} --cens {input.cen} \
+  --sat 0.70 --peri 5000000 --telo 500000 \
+  {input.bed} {output.bed} {output.lowid} 
+          """)
+
+rule sedef_bb:
+    input:
+        bed = rules.sedef_browser.output.bed,
+        lowid = rules.sedef_browser.output.lowid,
+        fai = FASTA + ".fai",
+    output:
+        bb = rules.sedef_browser.output.bed + ".bb",
+        lowid = rules.sedef_browser.output.lowid+".bb",
+    resources:
+        mem=8,
+    threads: 1
+    shell:"""
+bedToBigBed -type=bed9+32 -tab -as={SDIR}/templates/sedef.as {input.bed} {input.fai} {output.bb}
+bedToBigBed -type=bed9+32 -tab -as={SDIR}/templates/sedef.as {input.lowid} {input.fai} {output.lowid}
 """
 
 rule sum_sedef:
@@ -210,12 +217,11 @@ rule enriched:
 
 
 rule sedef:
-	input:
-		rules.sedef_browser.output,
-		rules.sedef_bb.output,
-        rules.find_cen.output.bed,
-        rules.sum_sedef.output,
-        rules.enriched.output.bed,
+  input:
+    rules.sedef_browser.output,
+    rules.sedef_bb.output,
+    rules.find_cen.output.bed,
+    rules.enriched.output.bed,
 
 
 

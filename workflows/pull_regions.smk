@@ -53,6 +53,10 @@ def get_rgn_fasta(wc):
       o.append(f.format(sm=sm,h=hap,r=rgn))
   return(o)
 
+wildcard_constraints:
+  sm="|".join(sms),
+  h="|".join(haps),
+  r="|".join(rgns)
 
 rule all:
   input:
@@ -385,7 +389,7 @@ rule mg_make_gfa:
   output:
     gfa = "Minigraph/{r}.gfa",
     fastas = directory("Minigraph/temp.{r}/"),
-    fasta = "Minigraph/temp.{r}/all.fasta",
+    fasta = "Minigraph/{r}.all.fasta",
   threads: 16
   run:
       shell("samtools faidx {input.fasta}")
@@ -410,7 +414,7 @@ minigraph -xggs -L 5000 -r 100000 -t {threads} {ordered} > {output.gfa} """)
 rule mg_map:
   input:
     gfa = "Minigraph/{r}.gfa",
-    fasta = "Minigraph/temp.{r}/all.fasta",
+    fasta = "Minigraph/{r}.all.fasta",
   output:
     gaf = "Minigraph/{r}.gaf",
   threads: 16

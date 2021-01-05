@@ -347,7 +347,7 @@ rule get_duplicons:
   threads: 16
   shell:"""
 snakemake -s {SDIR}/workflows/mask.smk \
-  -j {threads} -p \
+  -j {threads} -p -k \
   {output.bed} \
   --config \
       threads=2 \

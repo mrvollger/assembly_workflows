@@ -143,7 +143,7 @@ rule clean_fasta:
 
 rule subset_gff:
     input:
-        gff = rules.get_gff.output.gff,
+        gff = GFF,
     output:
         gff = temp("Liftoff/tmp/{SM}.subset.gff3"),
     threads: 1

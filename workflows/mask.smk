@@ -313,38 +313,39 @@ def hex_to_rgb(h):
 	return( ",".join( tuple( str(int(h[i:i+2], 16)) for i in (0, 2, 4))  )  )
 
 rule DupMaskerBed:
-	input:
-		#color = rules.mergeDM.output.color,
-		colors = expand(rules.DupMaskerColor.output.dupcolor,ID=IDS, SM=SM),
-	output:
-		bed =  BED
-	resources:
-		mem=4,
-	threads: 1 
-	run:
-		colors = []
-		for f in input.colors:
-			#chr    chrStart	chrEnd  orient  Repeat  color   width   offset
-			color = pd.read_csv(f, sep="\s+")
-			colors.append(color)
+  input:
+    #color = rules.mergeDM.output.color,
+    colors = expand(rules.DupMaskerColor.output.dupcolor,ID=IDS, SM=SM),
+  output:
+    bed =  BED
+  resources:
+    mem=4,
+  threads: 1 
+  run:
+    colors = []
+    for f in input.colors:
+      #chr    chrStart	chrEnd  orient  Repeat  color   width   offset
+      color = pd.read_csv(f, sep="\s+")
+      colors.append(color)
 
-		color = pd.concat(colors, ignore_index=True)
+    color = pd.concat(colors, ignore_index=True)
+    print(color)
+    
+    # these rows are no good, they come from contigs that have messed up results. fix TODO
+    bad= (color["chr"] == 0 ) & ( color["chrEnd"] == "#BEBEBE")
+    color.drop(color[bad].index, inplace = True)
 
-		# these rows are no good, they come from contigs that have messed up results. fix TODO
-		bad= (color["chr"] == 0 ) & ( color["chrEnd"] == "#BEBEBE")
-		color.drop(color[bad].index, inplace = True)
+    color.sort_values(by=["chr", "chrStart"], inplace=True)
 
-		color.sort_values(by=["chr", "chrStart"], inplace=True)
+    color["strand"] = "+"
+    color.loc[color["orient"] == "R", "strand"] = "-"
 
-		color["strand"] = "+"
-		color.loc[color["orient"] == "R", "strand"] = "-"
+    color["rgb"] = color["color"].map(hex_to_rgb)
+    color["score"] = 0
 
-		color["rgb"] = color["color"].map(hex_to_rgb)
-		color["score"] = 0
-
-		color.sort_values(by=["chr", "chrStart"], inplace=True)
-		out = color[ ["chr", "chrStart", "chrEnd", "Repeat", "score", "strand", "chrStart", "chrEnd", "rgb"] ]
-		out.to_csv(output["bed"], sep="\t", header=False, index=False)			
+    color.sort_values(by=["chr", "chrStart"], inplace=True)
+    out = color[ ["chr", "chrStart", "chrEnd", "Repeat", "score", "strand", "chrStart", "chrEnd", "rgb"] ]
+    out.to_csv(output["bed"], sep="\t", header=False, index=False)			
 
 
 rule DupMaskerHTML:

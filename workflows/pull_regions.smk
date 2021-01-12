@@ -120,7 +120,7 @@ rule get_rgn_query:
     ref = REF,
     genome = FAI,
   output:
-    query = "temp/{sm}.{h}.query.flank.fasta",
+    query = temp("temp/{sm}.{h}.query.flank.fasta"),
   threads: 4
   shell:"""
 bedtools getfasta -name+ \
@@ -134,7 +134,7 @@ rule get_rgn_paf:
     mmi=rules.index.output.mmi,
     query="temp/{sm}.{h}.query.flank.fasta",
   output:
-    all_paf="temp/{sm}.{h}.paf",
+    all_paf=temp("temp/{sm}.{h}.paf"),
   threads: 4
   shell:"""
 minimap2 {MM_OPTS} -2 --secondary=no --eqx -Y -t {threads} \
@@ -143,7 +143,7 @@ minimap2 {MM_OPTS} -2 --secondary=no --eqx -Y -t {threads} \
 
 rule get_rgn:
   input:
-    all_paf="temp/{sm}.{h}.paf",
+    all_paf=ancient("temp/{sm}.{h}.paf"),
   output:
     paf="temp/{sm}.{h}.{r}.paf",
   threads: 1
@@ -344,13 +344,13 @@ rule get_duplicons:
     fasta = rules.simple_fasta.output.fasta,
   output:
     bed = "Masked/{r}_dupmasker_colors.bed"
-  threads: 16
+  threads: 48
   shell:"""
 snakemake -s {SDIR}/workflows/mask.smk \
   -j {threads} -p -k \
   {output.bed} \
   --config \
-      threads=2 \
+      threads=12 \
       fasta=$(readlink -f {input.fasta}) \
       sample={wildcards.r} \
   --nolock 
@@ -359,27 +359,39 @@ snakemake -s {SDIR}/workflows/mask.smk \
 rule get_genes:
     input:
       fasta = rules.simple_fasta.output.fasta,
-      ref = REF,
-      gff = GFF,
+      bed="temp/GRCh38chrOnly.pri.{r}.bed",
+      #ref = REF,
+      #gff = GFF,
     output:
-      subset = "Liftoff/{r}.subset.bed",
+      #subset = "Liftoff/{r}.subset.bed",
       bed12 = "Liftoff/{r}.orf_only.bed",
       bedall = "Liftoff/{r}.all.bed",
     threads: 24
     run:
-      x = regions.loc[wildcards.r]
-      open(output.subset, "w+").write(f"{x.chr}\t{x.start}\t{x.end}\n")
-
       shell("""snakemake -s {SDIR}/workflows/liftoff.smk \
-              -j {threads} -p \
-              {output.bed12} {output.bedall} \
-              --config \
-                  fasta=$(readlink -f {input.fasta}) \
-                  ref={input.ref} \
-                  gff=$(readlink -f {input.gff}) \
-                  regions=$(readlink -f {output.subset}) \
-                  sample={wildcards.r} \
-              --nolock  || touch {output.bed12} {output.bedall}""")
+                -j {threads} -p \
+                {output.bed12} {output.bedall} \
+                --config \
+                    fasta=$(readlink -f {input.fasta}) \
+                    regions=$(readlink -f {input.bed}) \
+                    sample={wildcards.r} \
+                --nolock  """)#|| touch {output.bed12} {output.bedall}""")
+
+
+
+      if False: # old pipeline that uses CHM13 as the reference for genes
+        x = regions.loc[wildcards.r]
+        open(output.subset, "w+").write(f"{x.chr}\t{x.start}\t{x.end}\n")
+        shell("""snakemake -s {SDIR}/workflows/liftoff.smk \
+                -j {threads} -p \
+                {output.bed12} {output.bedall} \
+                --config \
+                    fasta=$(readlink -f {input.fasta}) \
+                    ref={input.ref} \
+                    gff=$(readlink -f {input.gff}) \
+                    regions=$(readlink -f {output.subset}) \
+                    sample={wildcards.r} \
+                --nolock  || touch {output.bed12} {output.bedall}""")
 
 
 

@@ -121,8 +121,8 @@ rule RepeatMasker:
 	output:
 		out = tempd("temp_minimiro/{SM}_{SEQ}.fasta.out"),
     #cat = tempd("temp_minimiro/{SM}_{SEQ}.fasta.cat"),
-		tbl = tempd("temp_minimiro/{SM}_{SEQ}.fasta.tbl"),
-		msk = tempd("temp_minimiro/{SM}_{SEQ}.fasta.masked"),
+    #tbl = tempd("temp_minimiro/{SM}_{SEQ}.fasta.tbl"),
+    #msk = tempd("temp_minimiro/{SM}_{SEQ}.fasta.masked"),
 	resources:
 		mem=8,
 	threads: MAXT

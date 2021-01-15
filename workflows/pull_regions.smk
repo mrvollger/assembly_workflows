@@ -267,19 +267,25 @@ rule simple_fasta:
       fasta = "combined/{r}.simple.fasta",
       yaml = "combined/{r}.simple.yaml",
   run:
+    # read in the fasta data
+    fasta=pysam.FastaFile(input.tmp)
+    print(fasta.references)
+    
+    # make a table of shared connections 
     df = pd.read_csv(input.tbl, sep="\t")
     e = df[(df.perID_by_all > 99) & ((df.query_end-df.query_start)/df.query_length > 0.9)
             & ~df.query_name.str.contains("CHM13|GRCh38")
             & ~df.reference_name.str.contains("CHM13|GRCh38")]
-    
+   
+    # make a graph of the connections
     g = nx.Graph()
-    g.add_nodes_from(set(list(df.query_name) + list(df.reference_name)))
+    g.add_nodes_from(fasta.references)
+    #g.add_nodes_from(set(list(df.query_name) + list(df.reference_name)))
     for i, x, y in e[["query_name", "reference_name"]].itertuples():
       g.add_edge(x,y)
-    
+   
+    # write the connection groups to file
     out = open(output.fasta, "w+")
-    fasta=pysam.FastaFile(input.tmp)
-    print(fasta.references)
     ctgs=[]
     for x in nx.connected_components(g):
       names = []

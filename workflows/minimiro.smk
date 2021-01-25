@@ -16,6 +16,7 @@ SEQS=["ref", "query"]
 SCORES = config.pop("scores", [1000])
 SIM = config.pop("simple", False)
 GENES = config.pop("genes", True)
+SECONDARY = config.pop("secondary", "yes")
 SMS = list(config.keys())
 print(SMS)
 
@@ -28,24 +29,29 @@ RGNS = {}
 QS = {}
 QRGNS = {}
 RCS = {}
-GENES = {}
+GENEBED = {}
 GFF = {}
 BAMS = {}
 for SM in SMS:
-	RS[SM] = os.path.abspath( config[SM]["ref"] ) # reference seqeunce 
-	assert os.path.exists(RS[SM]+".fai")
-	RGNS[SM]	=	config[SM]["regions"] # region(s) to pull from reference 
-	QS[SM]		=	os.path.abspath( config[SM]["query"] )# query sequence
-	assert os.path.exists(QS[SM]+".fai")
-	QRGNS[SM]	=	config[SM]["queryregions"] # region(s) to pull from query
-	if("rc" in config[SM]):
-		RCS[SM] = config[SM]["rc"] 
-	else: 
-		RCS[SM] = False
-	GFF[SM] = os.path.abspath( config[SM]["gff"] )
+  RS[SM] = os.path.abspath( config[SM]["ref"] ) # reference seqeunce 
+  assert os.path.exists(RS[SM]+".fai")
+  RGNS[SM]	=	config[SM]["regions"] # region(s) to pull from reference 
+  QS[SM]		=	os.path.abspath( config[SM]["query"] )# query sequence
+  assert os.path.exists(QS[SM]+".fai")
+  QRGNS[SM]	=	config[SM]["queryregions"] # region(s) to pull from query
+  if("rc" in config[SM]):
+    RCS[SM] = config[SM]["rc"] 
+  else: 
+    RCS[SM] = False
 
-	if("bam" in config[SM]):
-		BAMS[SM] = config[SM]["bam"]
+  if "gff" in config[SM]:
+    GFF[SM] = os.path.abspath( config[SM]["gff"] )
+
+  if("bam" in config[SM]):
+    BAMS[SM] = config[SM]["bam"]
+
+  if("genebed" in config[SM]):
+    GENEBED[SM] = config[SM]["genebed"]
 
 workdir: "minimiro"
 
@@ -70,8 +76,11 @@ def get_ref(wildcards):
 	return(RS[SM])
 
 def get_gff(wildcards):
-	SM = str(wildcards.SM)
-	return(GFF[SM])
+  SM = str(wildcards.SM)
+  if(SM in GFF):
+    return(GFF[SM])
+  else:
+    return(get_ref(wildcards)) # this is a fake git so it can be skipped
 
 def get_query(wildcards):
 	SM = str(wildcards.SM)
@@ -162,9 +171,9 @@ rule DupMaskerColor:
 #
 # rules to get genes
 #
-def get_genes(wildcards):
-    SM = str(wildcards.SM)
-    return(GENES[SM])
+#def get_genes(wildcards):
+#    SM = str(wildcards.SM)
+#    return(GENES[SM])
 
 def get_ref_bed(wildcards):
     SM = str(wildcards.SM)
@@ -191,32 +200,35 @@ rule clean_gff:
         bed = get_ref_bed,
     threads: 8
     run:
-        open(output.rgns, "w+").write("\n".join(params.bed) )
-        shell("""
-                #echo '##gff-version 3' > {output.gff} 
-                bedtools intersect -header -f 1.0 -a {input.gff} -b {output.rgns} | \
-                    {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-genes -F > {output.gff} """)
-        shell("""
-            {SDIR}/scripts/AddUniqueGeneIDs_2.py {output.gff} \
-                    | {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-comments --adj-stop -C -F -g {input.ref} /dev/stdin \
-                    | {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-comments -F -J -g {input.ref} /dev/stdin \
-                    | {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-comments -F -M -K /dev/stdin \
-                    | sed 's/CDStopAdjusted/cDStopAdjusted/g' > {output.tmpgff}""")
-        
-        gff=open(output.tmpgff).readlines()
-        count=0
-        for line in gff:
-            if(line[0]=="#"): continue
-            count+=1
-        if(count==0):
-            shell("touch {output.bed}")
+        if(not GENES):
+          shell("touch {output}")
         else:
-            shell("""
-            gff3ToGenePred -warnAndContinue -geneNameAttr=gene_name -useName {output.tmpgff} /dev/stdout | \
-                    genePredToBigGenePred /dev/stdin /dev/stdout | \
-                    awk -F $'\t' '{{ t = $4; $4 = $13; $13 = t; print; }}' OFS=$'\t' | \
-                    bedtools sort -i - > {output.bed} 
-                """)
+          open(output.rgns, "w+").write("\n".join(params.bed) )
+          shell("""
+                  #echo '##gff-version 3' > {output.gff} 
+                  bedtools intersect -header -f 1.0 -a {input.gff} -b {output.rgns} | \
+                      {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-genes -F > {output.gff} """)
+          shell("""
+              {SDIR}/scripts/AddUniqueGeneIDs_2.py {output.gff} \
+                      | {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-comments --adj-stop -C -F -g {input.ref} /dev/stdin \
+                      | {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-comments -F -J -g {input.ref} /dev/stdin \
+                      | {SDIR}/bin/gffread-0.12.3.Linux_x86_64/gffread --keep-comments -F -M -K /dev/stdin \
+                      | sed 's/CDStopAdjusted/cDStopAdjusted/g' > {output.tmpgff}""")
+          
+          gff=open(output.tmpgff).readlines()
+          count=0
+          for line in gff:
+              if(line[0]=="#"): continue
+              count+=1
+          if(count==0):
+              shell("touch {output.bed}")
+          else:
+              shell("""
+              gff3ToGenePred -warnAndContinue -geneNameAttr=gene_name -useName {output.tmpgff} /dev/stdout | \
+                      genePredToBigGenePred /dev/stdin /dev/stdout | \
+                      awk -F $'\t' '{{ t = $4; $4 = $13; $13 = t; print; }}' OFS=$'\t' | \
+                      bedtools sort -i - > {output.bed} 
+                  """)
 
 rule get_ref_genes:
     input:
@@ -227,23 +239,26 @@ rule get_ref_genes:
     params:
         bed = get_ref_bed,
     run:
-        # make a bed file with all the corrdiantes in the correct space
-        rtn = ""
-        for bed in params["bed"]:
-            # subset gene bed, and then fix coords
-            shell("""bedtools intersect -header -f 1.0 -a {input.bed} -b <(printf "{bed}") | bedtools sort -i - > {output.tmp} """)
+        if(not GENES):
+          shell("touch {output}")
+        else:
+          # make a bed file with all the corrdiantes in the correct space
+          rtn = ""
+          for bed in params["bed"]:
+              # subset gene bed, and then fix coords
+              shell("""bedtools intersect -header -f 1.0 -a {input.bed} -b <(printf "{bed}") | bedtools sort -i - > {output.tmp} """)
 
-            chrm, start, end = bed.split(); start = int(start);
-            name = f"{chrm}:{start}-{end}"
-            for line in open(output["tmp"]).readlines():
-                t = line.strip().split()
-                t[0] = name
-                t[1] = int(t[1]) - start	
-                t[2] = int(t[2]) - start	
-                rtn += (11*"{}\t" + "{}\n").format(*t)
+              chrm, start, end = bed.split(); start = int(start);
+              name = f"{chrm}:{start}-{end}"
+              for line in open(output["tmp"]).readlines():
+                  t = line.strip().split()
+                  t[0] = name
+                  t[1] = int(t[1]) - start	
+                  t[2] = int(t[2]) - start	
+                  rtn += (11*"{}\t" + "{}\n").format(*t)
 
-        open(output["bed12"], "w+").write(rtn)
-            
+          open(output["bed12"], "w+").write(rtn)
+              
 
 rule query_genes:
     input:
@@ -258,16 +273,19 @@ rule query_genes:
         bed = get_ref_bed,
     threads: 8
     run:
-        shell("samtools faidx {input.fasta}")
-        shell("""snakemake -s {SDIR}/workflows/liftoff.smk \
-                -j {threads} -p \
-                {output.bed12} \
-                --config \
-                    fasta=$(readlink -f {input.fasta}) \
-                    ref={input.ref} \
-                    gff=$(readlink -f {input.gff}) \
-                    sample={wildcards.SM} \
-                --nolock || touch {output.bed12}""")
+        if(not GENES):
+          shell("touch {output}")
+        else:
+          shell("samtools faidx {input.fasta}")
+          shell("""snakemake -s {SDIR}/workflows/liftoff.smk \
+                  -j {threads} -p \
+                  {output.bed12} \
+                  --config \
+                      fasta=$(readlink -f {input.fasta}) \
+                      ref={input.ref} \
+                      gff=$(readlink -f {input.gff}) \
+                      sample={wildcards.SM} \
+                  --nolock || touch {output.bed12}""")
 
 
 #
@@ -287,12 +305,20 @@ rule minimap2:
 	threads: 16
 	shell:"""
 # YOU HAVE TO INCLUDE --cs FOR MINIMIRO TO WORK
-minimap2 -x asm20 -r 200000 -s {params.score} -p 0.01 -N 1000 --cs {input.ref} {input.query} > {output.paf}
+minimap2 -x asm20 -r 200000 -s {params.score} \
+           -p 0.01 -N 1000 --secondary={SECONDARY}\
+           --cs {input.ref} {input.query} > {output.paf}
 """
 
-param_genes = ""
-if(GENES):
-  param_genes = " --bed <(cut -f 1-12 {input.genes} ) <(cut -f 1-12 {input.query_genes} ) "
+def get_in_gene(wildcards):
+  param_genes = ""
+  if(GENES):
+    rgenes = rules.get_ref_genes.output.bed12
+    rgenes = rules.get_ref_genes.output.bed12
+    param_genes = " --bed <(cut -f 1-12 {input.genes} ) <(cut -f 1-12 {input.query_genes} ) "
+  elif(wildcards.SM in GENEBED):
+    param_genes = f" --bed <(cut -f 1-12 {GENEBED[wildcards.SM]} | grep NOTCH2)"
+  return(param_genes)
 
 rule minimiro:
     input:
@@ -304,13 +330,15 @@ rule minimiro:
     output:
         ps	= "temp_minimiro/{SM}_{SCORE}_aln.ps",
         pdf	= "miro_figures/{SM}_{SCORE}_aln.pdf",
+    params:
+      genes=get_in_gene,
     threads: 1
 	shell:"""
 {SDIR}/scripts/minimiro.py --paf {input.paf} \
 	--rm {input.rmout} \
 	--dm {input.dmout} \
   {param_sim} \
-  {param_genes} \
+  {params.genes} \
 	--bestn 1000 \
 	-o {output.ps} && \
 	ps2pdf {output.ps} {output.pdf}

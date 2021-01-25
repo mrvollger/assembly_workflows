@@ -287,6 +287,7 @@ rule simple_fasta:
     # write the connection groups to file
     out = open(output.fasta, "w+")
     ctgs=[]
+    seen = set()
     for x in nx.connected_components(g):
       names = []
       for n in x:
@@ -294,10 +295,13 @@ rule simple_fasta:
         names.append( ".".join(m.groups()) )
       cmt = ":".join(names)
       name= names[0] + "__" + str(len(names)) + ""
+      if(name in seen):
+        continue
       ctg=x.pop()
       seq = fasta.fetch(ctg)
       ctgs.append(name)
       out.write(f">{name}\t{cmt}\n{seq}\n")
+      seen.add(name)
     out.close() 
     shell("samtools faidx {output.fasta}")
     
@@ -321,7 +325,7 @@ rule simple_fasta:
     # write all contigs to output
     #
     allo = open(output.allfasta, "w+")
-    for name in sort_ctgs(fasta.references, extra=False):
+    for name in sort_ctgs(set(fasta.references), extra=False):
       seq = fasta.fetch(name)
       allo.write(f">{name}\n{seq}\n")
     allo.close() 

@@ -174,9 +174,8 @@ rule run_liftoff:
 		mem=8,
 	shell:"""
 liftoff -dir {output.temp} \
-        -infer_genes \
         -f <(echo "locus") \
-        -flank 1.0 \
+        -flank 0.1 \
         -sc 0.85 -copies -p {threads} \
         -g {input.gff} -o {output.gff} -u {output.unmapped} \
          {input.t} {input.r} \
@@ -255,7 +254,7 @@ else
   touch {output.bed} {output.bb}
 fi 
 
-if [ -s {input.gff} ]; then
+if [ -s {input.all} ]; then
   gff3ToGenePred -geneNameAttr=gene_name -warnAndContinue -useName {input.all}  /dev/stdout | \
       genePredToBigGenePred /dev/stdin /dev/stdout | \
       awk -F $'\t' '{{ t = $4; $4 = $13; $13 = t; print; }}' OFS=$'\t' | \

@@ -16,6 +16,7 @@ SEQS=["ref", "query"]
 SCORES = config.pop("scores", [1000])
 SIM = config.pop("simple", False)
 GENES = config.pop("genes", True)
+GREP = config.pop("grep", ".")
 SECONDARY = config.pop("secondary", "yes")
 SMS = list(config.keys())
 print(SMS)
@@ -246,7 +247,8 @@ rule get_ref_genes:
           rtn = ""
           for bed in params["bed"]:
               # subset gene bed, and then fix coords
-              shell("""bedtools intersect -header -f 1.0 -a {input.bed} -b <(printf "{bed}") | bedtools sort -i - > {output.tmp} """)
+              shell("""bedtools intersect -header -f 1.0 -a {input.bed} -b <(printf "{bed}") \
+                | bedtools sort -i - > {output.tmp} """)
 
               chrm, start, end = bed.split(); start = int(start);
               name = f"{chrm}:{start}-{end}"
@@ -260,15 +262,16 @@ rule get_ref_genes:
           open(output["bed12"], "w+").write(rtn)
               
 
-rule query_genes:
+rule liftoff_genes:
     input:
-        fasta = rules.get_rgns.output.query,
-        ref = get_ref,
-        #gff = get_gff,
+        fa1 = rules.get_rgns.output.query,
+        fa2 = rules.get_rgns.output.ref,
         rgns = rules.clean_gff.output.rgns,
+        ref = get_ref,
         gff = rules.clean_gff.output.gff,
     output:
         bed12 = "Liftoff/{SM}.all.bed",
+        fasta = "Liftoff/tmp.combined.{SM}.fasta",
     params:
         bed = get_ref_bed,
     threads: 8
@@ -276,12 +279,14 @@ rule query_genes:
         if(not GENES):
           shell("touch {output}")
         else:
-          shell("samtools faidx {input.fasta}")
+          shell("cat {input.fa1} {input.fa2} | seqtk seq -l 60 > {output.fasta}; sleep 5")
+          shell("samtools faidx {output.fasta}")
+
           shell("""snakemake -s {SDIR}/workflows/liftoff.smk \
                   -j {threads} -p \
                   {output.bed12} \
                   --config \
-                      fasta=$(readlink -f {input.fasta}) \
+                      fasta=$(readlink -f {output.fasta}) \
                       ref={input.ref} \
                       gff=$(readlink -f {input.gff}) \
                       sample={wildcards.SM} \
@@ -312,8 +317,7 @@ minimap2 -x asm20 -r 200000 -s {params.score} \
 
 def get_in_gene(wildcards):
   if(GENES):
-    out = [(rules.Liftoff.output.bed12).format(SM = wildcards.SM),
-            (rules.get_ref_genes.output.bed12).format(SM = wildcards.SM)]
+    out = [(rules.liftoff_genes.output.bed12).format(SM = wildcards.SM)]
   elif(wildcards.SM in GENEBED):
     out = [GENEBED[wildcards.SM]]
   else:
@@ -338,7 +342,7 @@ rule minimiro:
 	--rm {input.rmout} \
 	--dm {input.dmout} \
   {param_sim} \
-  --bed <(cat {input.genes} | cut -f 1-12 ) \
+  --bed <(cat {input.genes} | cut -f 1-12 | grep -i '{GREP}' ) \
 	--bestn 1000 \
 	-o {output.ps} && \
 	ps2pdf {output.ps} {output.pdf}

@@ -176,6 +176,7 @@ rule run_liftoff:
 liftoff -dir {output.temp} \
         -infer_genes \
         -f <(echo "locus") \
+        -flank 1.0 \
         -sc 0.85 -copies -p {threads} \
         -g {input.gff} -o {output.gff} -u {output.unmapped} \
          {input.t} {input.r} \
@@ -241,22 +242,30 @@ rule orf_bb:
     resources:
         mem=8,
     shell:"""
-gff3ToGenePred -geneNameAttr=gene_name -useName {input.gff} /dev/stdout | \
-    genePredToBigGenePred /dev/stdin /dev/stdout | \
-    awk -F $'\t' '{{ t = $4; $4 = $13; $13 = t; print; }}' OFS=$'\t' | \
-    awk '{{print $0"none"}}' | \
-    bedtools sort -i - > {output.bed} 
 
-bedToBigBed -extraIndex=name,name2 -type=bed12+8 -tab -as={SDIR}/templates/bigGenePred.as {output.bed} {input.fai} {output.bb}
+if [ -s {input.gff} ]; then
+  gff3ToGenePred -geneNameAttr=gene_name -useName {input.gff} /dev/stdout | \
+      genePredToBigGenePred /dev/stdin /dev/stdout | \
+      awk -F $'\t' '{{ t = $4; $4 = $13; $13 = t; print; }}' OFS=$'\t' | \
+      awk '{{print $0"none"}}' | \
+      bedtools sort -i - > {output.bed} 
 
-gff3ToGenePred -geneNameAttr=gene_name -warnAndContinue -useName {input.all}  /dev/stdout | \
-    genePredToBigGenePred /dev/stdin /dev/stdout | \
-    awk -F $'\t' '{{ t = $4; $4 = $13; $13 = t; print; }}' OFS=$'\t' | \
-    awk '{{print $0"none"}}' | \
-    bedtools sort -i - > {output.all}
+  bedToBigBed -extraIndex=name,name2 -type=bed12+8 -tab -as={SDIR}/templates/bigGenePred.as {output.bed} {input.fai} {output.bb}
+else
+  touch {output.bed} {output.bb}
+fi 
 
-bedToBigBed -extraIndex=name,name2 -type=bed12+8 -tab -as={SDIR}/templates/bigGenePred.as {output.all} {input.fai} {output.allbb}
+if [ -s {input.gff} ]; then
+  gff3ToGenePred -geneNameAttr=gene_name -warnAndContinue -useName {input.all}  /dev/stdout | \
+      genePredToBigGenePred /dev/stdin /dev/stdout | \
+      awk -F $'\t' '{{ t = $4; $4 = $13; $13 = t; print; }}' OFS=$'\t' | \
+      awk '{{print $0"none"}}' | \
+      bedtools sort -i - > {output.all}
 
+  bedToBigBed -extraIndex=name,name2 -type=bed12+8 -tab -as={SDIR}/templates/bigGenePred.as {output.all} {input.fai} {output.allbb}
+else
+  touch {output.all} {output.allbb}
+fi
 """
 
 rule liftoff_sum:

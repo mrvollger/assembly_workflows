@@ -268,7 +268,7 @@ rule query_genes:
         rgns = rules.clean_gff.output.rgns,
         gff = rules.clean_gff.output.gff,
     output:
-        bed12 = "Liftoff/{SM}.orf_only.bed",
+        bed12 = "Liftoff/{SM}.all.bed",
     params:
         bed = get_ref_bed,
     threads: 8

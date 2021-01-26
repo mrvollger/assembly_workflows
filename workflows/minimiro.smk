@@ -311,22 +311,22 @@ minimap2 -x asm20 -r 200000 -s {params.score} \
 """
 
 def get_in_gene(wildcards):
-  param_genes = ""
   if(GENES):
-    rgenes = rules.get_ref_genes.output.bed12
-    rgenes = rules.get_ref_genes.output.bed12
-    param_genes = " --bed <(cut -f 1-12 {input.genes} ) <(cut -f 1-12 {input.query_genes} ) "
+    out = [(rules.Liftoff.output.bed12).format(SM = wildcards.SM),
+            (rules.get_ref_genes.output.bed12).format(SM = wildcards.SM)]
   elif(wildcards.SM in GENEBED):
-    param_genes = f" --bed <(cut -f 1-12 {GENEBED[wildcards.SM]} | grep NOTCH2)"
-  return(param_genes)
+    out = [GENEBED[wildcards.SM]]
+  else:
+    shell("touch tmp.fake.bed")
+    out = ["tmp.fake.bed"]
+  return(out)
 
 rule minimiro:
     input:
         paf = rules.minimap2.output.paf,
         rmout = expand("temp_minimiro/{{SM}}_{SEQ}.fasta.out", SEQ=SEQS),
         dmout = expand("temp_minimiro/{{SM}}_{SEQ}.fasta.duplicons.extra", SEQ=SEQS),
-        genes = rules.get_ref_genes.output.bed12,
-        query_genes = rules.query_genes.output.bed12,
+        genes = get_in_gene,
     output:
         ps	= "temp_minimiro/{SM}_{SCORE}_aln.ps",
         pdf	= "miro_figures/{SM}_{SCORE}_aln.pdf",
@@ -338,7 +338,7 @@ rule minimiro:
 	--rm {input.rmout} \
 	--dm {input.dmout} \
   {param_sim} \
-  {params.genes} \
+  --bed <(cat {input.genes} | cut -f 1-12 ) \
 	--bestn 1000 \
 	-o {output.ps} && \
 	ps2pdf {output.ps} {output.pdf}

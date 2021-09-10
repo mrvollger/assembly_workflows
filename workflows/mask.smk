@@ -36,7 +36,7 @@ SM = "asm"
 if("sample" in config): SM = config["sample"]
 SPECIES = "human"
 if("species" in config): SPECIES = config["species"]
-THREADS = 8
+THREADS = 16
 if("threads" in config): THREADS = config["threads"]
 
 
@@ -377,6 +377,14 @@ rule DupMaskerSummary:
         with pd.ExcelWriter(output.excel) as writer:
             df.to_excel(writer, sheet_name='Duplicons', index=False)
 
+
+rule DupMasker:
+    input:
+        bed=BED,
+        color=COLOR,
+        dup=DUP,
+
+ 
 ####################################################################
 ####################### TRF MASKER #################################
 ####################################################################

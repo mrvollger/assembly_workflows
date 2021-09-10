@@ -133,6 +133,8 @@ rule clean_fasta:
     output:
         fasta=temp("Liftoff/tmp/{SM}.fasta"),
         fai=temp("Liftoff/tmp/{SM}.fasta.fai")
+    resources:
+        mem=8
     run:
         tag=input.fasta.strip()[-3:]
         if(tag==".gz"):
@@ -176,6 +178,7 @@ rule run_liftoff:
 liftoff -dir {output.temp} \
         -f <(echo "locus") \
         -flank 0.1 \
+        -n 500 \
         -sc 0.85 -copies -p {threads} \
         -g {input.gff} -o {output.gff} -u {output.unmapped} \
          {input.t} {input.r} \

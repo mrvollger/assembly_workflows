@@ -27,6 +27,6 @@ rule all:
         rules.sedef.input,
         rules.DupMaskerBed.output.bed,
         rules.DupMaskerSummary.output,
-        rules.align.input,
+#rules.align.input,
 
 

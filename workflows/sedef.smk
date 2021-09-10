@@ -96,7 +96,7 @@ rule run_sedef:
 		bed = f"SEDEF/{SM}/final.bed"
 	resources:
 		mem=8
-	threads: 120
+	threads: 140
 	shell:"""
 cp {input.fasta} {output.tmpf} 
 samtools faidx {output.tmpf}

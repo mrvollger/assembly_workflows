@@ -23,10 +23,11 @@ THREADS=16
 df = pd.read_csv(TBL, sep="\s+", comment="#")
 
 HAPS=["hap1","hap2"]
-SMS=df["sample"]
 SM_ASM = {}
 for idx, row in df.iterrows():
+  if os.path.exists(row.pat) and os.path.exists(row.mat):
     SM_ASM[row["sample"]] = {"pat": os.path.abspath(row.pat), "mat":os.path.abspath(row.mat)}
+SMS=list(SM_ASM.keys())
 
 
 #
@@ -50,12 +51,14 @@ rule get_dipcall:
         run="dipcall.kit/run-dipcall",
     threads: 1
     shell:"""
-wget https://github.com/lh3/dipcall/releases/download/v0.1/dipcall-0.1_x64-linux.tar.bz2
+#wget https://github.com/lh3/dipcall/releases/download/v0.1/dipcall-0.1_x64-linux.tar.bz2
 tar -jxf dipcall-0.1_x64-linux.tar.bz2
-rm dipcall-0.1_x64-linux.tar.bz2
+wget https://github.com/lh3/dipcall/releases/download/v0.2/dipcall-0.2_x64-linux.tar.bz2
+tar -jxf dipcall-0.2_x64-linux.tar.bz2
+rm dipcall-0.2_x64-linux.tar.bz2
 """
 
-MM_OPT=f"-x asm5 -r50k --cs -t {THREADS} -I 8G -2K 1500m"
+MM_OPT=f"-x asm20 --cs -t {THREADS} "
 def get_pat(wc):
     return(SM_ASM[wc.SM]["pat"])
 def get_mat(wc):
@@ -72,15 +75,24 @@ rule dipcall_paf:
         hap=get_hap,
         dipcall=rules.get_dipcall.output,
     output:
-        paf = temp("{SM}.{HAP}.paf.gz"),
+        paf = "pafs/{SM}.{HAP}.paf",
     log:
-        log=temp("{SM}.{HAP}.paf.gz.log"),
+        log=temp("logs/{SM}.{HAP}.paf.log"),
     threads:THREADS
     shell:"""
-dipcall.kit/minimap2 -c --paf-no-hit {MM_OPT} {input.ref} {input.hap} \
-    2> {log.log} | pigz -p {threads} > {output.paf}
+#dipcall.kit/minimap2
+module load unimap/0.1
+  unimap \
+    -c --paf-no-hit {MM_OPT} {input.ref} {input.hap} \
+    2> {log.log} > {output.paf}
 """
- 
+
+rule pafs:
+  input:
+    expand(rules.dipcall_paf.output.paf, SM=SMS, HAP=HAPS)
+
+
+
 rule dipcall_sam:
     input:
         ref=REF,
@@ -92,7 +104,10 @@ rule dipcall_sam:
         log=temp("{SM}.{HAP}.sam.gz.log"),
     threads:THREADS
     shell:"""
-dipcall.kit/minimap2 -R @RG'\\tID':{wildcards.SM}'\\t'SM:{wildcards.SM} -a {MM_OPT} {input.ref} {input.hap} \
+#dipcall.kit/minimap2
+module load unimap/0.1
+  unimap \
+    -R @RG'\\tID':{wildcards.SM}'\\t'SM:{wildcards.SM} -a {MM_OPT} {input.ref} {input.hap} \
     2> {log.log} | pigz -p {threads} > {output.sam}
 """
 
@@ -116,7 +131,8 @@ rule dipcall_pair:
         vcf = "{SM}.pair.vcf.gz"
     threads: 4
     shell:"""
-dipcall.kit/htsbox pileup -q5 -evcf {input.ref} {input.bam1} {input.bam2} | dipcall.kit/htsbox bgzip > {output.vcf}
+dipcall.kit/htsbox pileup -q5 -evcf {input.ref} {input.bam1} {input.bam2} \
+    | dipcall.kit/htsbox bgzip > {output.vcf}
 """
 
 
@@ -249,23 +265,30 @@ java -jar snpEff/snpEff.jar \
 
 rule index_vcf:
     input:
-        vcf=rules.dipcall_vcf.output.vcf,
+      vcf = rules.dipcall_vcf.output.vcf,
+      pair = rules.dipcall_pair.output.vcf,
     output:
-        csi=rules.dipcall_vcf.output.vcf + ".csi",
+      csi=rules.dipcall_vcf.output.vcf + ".csi",
+      pcsi = rules.dipcall_pair.output.vcf + ".csi",
     threads: 4
     shell:"""
 bcftools index {input.vcf}
+bcftools index {input.pair}
 """
 
 rule merge_vcf:
   input:
     vcf = expand("{SM}.dip.vcf.gz", SM=SMS),
+    pair = expand("{SM}.pair.vcf.gz", SM=SMS),
     csi= expand(rules.dipcall_vcf.output.vcf + ".csi",SM=SMS),
+    paircsi= expand("{SM}.pair.vcf.gz.csi",SM=SMS),
   output:
     vcf = "all.vcf.gz",
+    pair = "all.pair.vcf.gz",
   threads: 16
   shell:"""
 bcftools merge --threads {threads} {input.vcf} | bgzip -@ {threads} > {output.vcf}
+bcftools merge --threads {threads} {input.pair} | bgzip -@ {threads} > {output.pair}
 """
 
 

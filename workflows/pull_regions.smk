@@ -225,9 +225,11 @@ rule region_fasta:
   output:
       tbl = "combined/{r}.tbl",
       tmp = "combined/{r}.tmp",
+      bam = "combined/{r}.unimap.bam",
+      utbl = "combined/{r}.unimap.tbl",
   params:
       minscore = get_minscore,
-  threads: 8
+  threads: 80
   shell:"""
 cat {input.fasta} > {output.tmp}
 samtools faidx {output.tmp}
@@ -235,6 +237,17 @@ minimap2 -r 50000 -ax asm20 -s {params.minscore} --eqx -Y -t {threads} \
           {output.tmp} {output.tmp} \
          | samtools view -F 4 -b - | samtools sort -@ {threads} - \
          | ~mvollger/projects/utility/samIdentity.py --header /dev/stdin > {output.tbl}
+
+module load unimap/0.1
+unimap -ax asm20 -s {params.minscore} --eqx -Y -t {threads} \
+          {output.tmp} {output.tmp} \
+          | samtools view -F 4 -b - \
+          | samtools sort \
+          > {output.bam}
+
+~mvollger/projects/utility/samIdentity.py \
+         --header {output.bam} \
+         > {output.utbl}
 """
 
 def sort_ctgs(ctgs, extra=True):
@@ -264,7 +277,9 @@ rule simple_fasta:
       tmp = "combined/{r}.tmp",
   output:      
       allfasta = "combined/{r}.all.fasta",
+      allfastafai = "combined/{r}.all.fasta.fai",
       fasta = "combined/{r}.simple.fasta",
+      fastafai = "combined/{r}.simple.fasta.fai",
       yaml = "combined/{r}.simple.yaml",
   run:
     # read in the fasta data
@@ -273,9 +288,10 @@ rule simple_fasta:
     
     # make a table of shared connections 
     df = pd.read_csv(input.tbl, sep="\t")
-    e = df[(df.perID_by_all > 99) & ((df.query_end-df.query_start)/df.query_length > 0.9)
-            & ~df.query_name.str.contains("CHM13|GRCh38")
-            & ~df.reference_name.str.contains("CHM13|GRCh38")]
+    e = df[(df.perID_by_all > 99) 
+            & ((df.query_end-df.query_start)/df.query_length > 0.9) ]
+#& ~df.query_name.str.contains("CHM13|GRCh38")
+#          & ~df.reference_name.str.contains("CHM13|GRCh38")]
    
     # make a graph of the connections
     g = nx.Graph()
@@ -283,25 +299,37 @@ rule simple_fasta:
     #g.add_nodes_from(set(list(df.query_name) + list(df.reference_name)))
     for i, x, y in e[["query_name", "reference_name"]].itertuples():
       g.add_edge(x,y)
+      g.add_edge(y,x)
    
     # write the connection groups to file
     out = open(output.fasta, "w+")
     ctgs=[]
     seen = set()
     for x in nx.connected_components(g):
-      names = []
-      for n in x:
+      sorted_names = sort_ctgs(x, extra=False)
+      clean_names = []
+      # get all the names going into this set  
+      for n in sorted_names:
         m = re.match(".+__(.+)__(.+)__ID.\d+", n)
-        names.append( ".".join(m.groups()) )
-      cmt = ":".join(names)
-      name= names[0] + "__" + str(len(names)) + ""
-      if(name in seen):
-        continue
-      ctg=x.pop()
+        clean_names.append( ".".join(m.groups()) )
+      cmt = ":".join(clean_names)
+      
+      # make sure we process each contig only once
+      s = False 
+      for n in sorted_names:
+        if n in seen:
+          s = True
+        seen.add(n)
+      if s: break 
+
+      # write the sequence to file 
+      name = clean_names[0] + "__" + str(len(clean_names)) + ""
+      sys.stderr.write(name + "\t" + cmt + "\n")
+      ctg=sorted_names[0]
       seq = fasta.fetch(ctg)
       ctgs.append(name)
       out.write(f">{name}\t{cmt}\n{seq}\n")
-      seen.add(name)
+    
     out.close() 
     shell("samtools faidx {output.fasta}")
     
@@ -354,13 +382,13 @@ rule get_duplicons:
     fasta = rules.simple_fasta.output.fasta,
   output:
     bed = "Masked/{r}_dupmasker_colors.bed"
-  threads: 48
+  threads: 12
   shell:"""
 snakemake -s {SDIR}/workflows/mask.smk \
   -j {threads} -p -k \
   {output.bed} \
   --config \
-      threads=12 \
+      threads=4 \
       fasta=$(readlink -f {input.fasta}) \
       sample={wildcards.r} \
   --nolock 
@@ -376,8 +404,16 @@ rule get_genes:
       #subset = "Liftoff/{r}.subset.bed",
       bed12 = "Liftoff/{r}.orf_only.bed",
       bedall = "Liftoff/{r}.all.bed",
-    threads: 24
+    threads: 12
     run:
+
+      # liftoff does weird things with reruns so I am going to clean the dir first
+      shell("rm -rf Liftoff/temp.{wildcards.r}/")
+      shell("rm -f {input.fasta}.mmi")
+      shell("rm -f Liftoff/{wildcards.r}.all.*")
+      shell("rm -f Liftoff/{wildcards.r}.orf_only.*")
+      shell("rm -f Liftoff/{wildcards.r}.gff3")
+
       shell("""snakemake -s {SDIR}/workflows/liftoff.smk \
                 -j {threads} -p \
                 {output.bed12} {output.bedall} \
@@ -417,13 +453,16 @@ rule mg_make_gfa:
       shell("samtools faidx {input.fasta}")
       pairs = { line.split()[0]:int(line.split()[1]) for line in open(input.fasta + ".fai") }
       names = sorted(list(pairs), key = lambda x: pairs[x]) 
-      ordered = [None, None]
+      ordered = []
       for name in names:
+        print(name)
         path=f"Minigraph/temp.{wildcards.r}/{name}.fasta"
         if name.startswith("GRCh38chrOnly"):
-          ordered[1] = path
+          ordered.insert(1, path)
         elif name.startswith("CHM13"):
-          ordered[0] = path
+          ordered.insert(0, path)
+        elif name.startswith("CHM1"):
+          ordered.append(path)
         elif ".pri" in name or ".alt" in name:
           continue
         else:
@@ -439,10 +478,21 @@ rule mg_map:
     fasta = "Minigraph/{r}.all.fasta",
   output:
     gaf = "Minigraph/{r}.gaf",
+    bed = "Minigraph/{r}.bed",
+    tmp = temp("Minigraph/{r}.bed.tmp.fa"),
   threads: 16
-  shell:"""
-minigraph -x asm -t {threads} {input.gfa} {input.fasta} > {output.gaf}
-"""
+  run:
+    shell("minigraph -x asm -N 0 -t {threads} {input.gfa} {input.fasta} > {output.gaf}")
+    shell("samtools faidx {input.fasta} && > {output.bed}")
+    for line in open(input.fasta + ".fai"):
+      name = line.split()[0]
+      shell("""
+          samtools faidx {input.fasta} {name} > {output.bed}.tmp.fa 
+          minigraph -x asm -N 0 -t {threads} \
+              --call {input.gfa} \
+              {output.bed}.tmp.fa \
+              >> {output.bed} || echo failed minigraph call on {name} """)
+
 
 rule mg_parse:
   input:
@@ -451,16 +501,75 @@ rule mg_parse:
   output:
     tbl = "Minigraph/{r}.tbl",
     csv = "Minigraph/{r}.csv",
-  threads: 16
+  threads: 1
   shell:"""
-{SDIR}/scripts/GAF_parsing.py {input.gaf} > {output.tbl}
+{SDIR}/scripts/GAF_parsing.py \
+    --ref $(cut -f 1 {input.gaf} | grep "CHM13.pri" | head -n 1 ) \
+    {input.gaf} > {output.tbl}
 {SDIR}/scripts/make_csv_from_gfa.sh {input.gfa} > {output.csv}
 """
 
+
+rule sub_table:
+  input:
+    fasta = rules.simple_fasta.output.fasta,
+    tbl = rules.mg_parse.output.tbl, 
+  output:
+    tbl = "Tables/{r}.tbl",
+  threads:1
+  run:
+    fai = pd.read_csv(input.fasta+".fai",
+        sep="\t", 
+        names=["contig", "length", "x","y","z"])[["contig", "length"]]
+    fai = fai.set_index('contig')
+    fai["region"] = wildcards.r 
+    fai["haplotypes"] = ""
+    for line in open(input.fasta).readlines():
+      if line[0] is not ">":
+        continue 
+      ts = line[1:].strip().split()
+      sup_hap, all_haps = ts[0], ts[1]
+      fai.at[sup_hap, "haplotypes"] = all_haps
+   
+
+    mg = pd.read_csv(input.tbl, sep="\t")
+    df = mg.merge(fai, left_on="q", right_index=True)
+    print(df)
+    df.to_csv(output.tbl, index=False, sep = "\t")
+
+
+rule table:
+  input:
+    fastas = expand(rules.simple_fasta.output.allfasta, r=rgns),
+    tbls = expand(rules.sub_table.output.tbl, r=rgns),
+  output:
+    tbl="results.tbl",
+    svtbl="sv.results.tbl",
+  run:
+    dfs=[]
+    for fasta in input.fastas:
+      df = pd.read_csv(fasta+".fai", sep="\t", names=["contig", "length", "x","y","z"])
+      df[['Region','sm','hap','drop']] = df.contig.str.split("__", expand=True)
+      df[['sm','Species']] = df.sm.str.split("_", expand=True)
+      df.Species.replace({None:"Human"}, inplace=True)
+      df["fasta"] = os.path.abspath(fasta)
+      dfs.append(df)
+    df = pd.concat(dfs, ignore_index=True)   
+    df.drop(['x','y','z','drop'], axis=1, inplace=True)
+    print(df)
+    df.to_csv(output.tbl, sep="\t", index=False)
+
+    # the other table
+    shell("head -n 1 {input.tbls[0]} > {output.svtbl}" )
+    shell("tail -n +2 -q {input.tbls} >> {output.svtbl}" )
+    
 rule minigraph: 
   input:
     tbl = expand(rules.mg_parse.output.tbl, r=rgns),
+    bed = expand(rules.mg_map.output.bed, r=rgns),
     genes = expand(rules.get_genes.output.bed12, r=rgns),
     duplicons = expand(rules.get_duplicons.output.bed, r=rgns),
+    fulltbl=rules.table.output.tbl,
+    svtbl=rules.table.output.svtbl,
 
 

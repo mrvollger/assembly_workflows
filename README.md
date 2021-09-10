@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/288580731.svg)](https://zenodo.org/badge/latestdoi/288580731)
 # assembly_workflows
 Interconnected snakemake workflows for annotation and analysis of assemblies.
 

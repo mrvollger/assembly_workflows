@@ -5,6 +5,7 @@ scores:
     # - 2000
 genes: False # if you set this to True out must include a gff compatible with liftoff (see commented out line below)
 simple: False # if this value is set to true the code will only make the duplicon tracks and none of the other minimiro output (good when there is lot of sequences).
+infer: True # Try to infer the orientation of the query sequences that will have the majority of sequence in the same direction.
 
 example_prefix: # a name which will prefix the outputs (can be anything without spaces)
     ref: ref.fa

@@ -2,6 +2,9 @@
 # assembly_workflows
 Interconnected snakemake workflows for annotation and analysis of assemblies.
 
+# Running minimiro
+To run `minimiro` please see the example and directions in `examples/minimiro/`
+
 # including a workflow
 To include a workflow (e.g. mask.smk) just add the following to you snakemake near the top:
 ```

@@ -4,8 +4,9 @@ scores:
     # e.g. :
     # - 2000
 genes: False # if you set this to True out must include a gff compatible with liftoff (see commented out line below)
+simple: False # if this value is set to true the code will only make the duplicon tracks and none of the other minimiro output (good when there is lot of sequences).
 
-example: # a name which will prefix the outputs (can be anything without spaces)
+example_prefix: # a name which will prefix the outputs (can be anything without spaces)
     ref: ref.fa
     # gff: /path/to/genes.gff3 # a full path to a gff3 file for your reference that is compatible with liftoff
     regions:

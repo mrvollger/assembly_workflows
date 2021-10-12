@@ -1,0 +1,20 @@
+scores:
+    - 1000
+    # you can add more scores to this list one one score will be made for each output
+    # e.g. :
+    # - 2000
+genes: False # if you set this to True out must include a gff compatible with liftoff (see commented out line below)
+
+example: # a name which will prefix the outputs (can be anything without spaces)
+    ref: ref.fa
+    # gff: /path/to/genes.gff3 # a full path to a gff3 file for your reference that is compatible with liftoff
+    regions:
+        # one or more regions in the "samtools faidx format" to include from the ref
+      - chr8 # you can add ":\d+-\d+" to sepecify a subregion instead of a whole contig
+    query: query.fa
+    queryregions:
+        - chr8_contig # same options possible as in the reference "regions"
+    # if you want to reverse complement the query you can uncomment the flag below
+    # rc: True 
+
+# you can add more regions to compare by making an entry like the one above with a unique name

@@ -8,3 +8,5 @@ To run the test case in this dir you would type:
 ```bash
 snakemake -s ../../workflows/minimiro.smk --configfile minimiro.yaml --cores 60 
 ```
+This `snakemake` is not set up for cluster distribution, please use on a single node like `ocelot`, `lynx`, or `liger`.
+

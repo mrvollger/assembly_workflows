@@ -11,9 +11,10 @@ snakemake -s ../../workflows/minimiro.smk --configfile minimiro.yaml --cores 60
 ```
 This `snakemake` is not set up for cluster distribution, please use on a single node like `ocelot`, `lynx`, or `liger`.
 
-# I am running into errors
+## Running into errors
 
 Try these things to before making an issue: 
+
   - Make sure this test case runs.
   - Make a new and unique prefix name and try rerunning.
   - Check to make sure your ref and query are indexed.

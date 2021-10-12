@@ -14,7 +14,7 @@ This `snakemake` is not set up for cluster distribution, please use on a single 
 ## Running into errors
 
 Try these things to before making an issue: 
-
+  - Read the `minimiro.yaml` example configuration carefully.
   - Make sure this test case runs.
   - Make a new and unique prefix name and try rerunning.
   - Check to make sure your ref and query are indexed.

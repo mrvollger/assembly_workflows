@@ -24,6 +24,6 @@ If you do need to contact me with an issue please be ready to share a minimal
 test case as well as a log file with the output of your run. 
 You can capture the output of your run like this for example:
 ```
-snakemake ... @> minimiro.log
+snakemake ... &> minimiro.log
 ```
 

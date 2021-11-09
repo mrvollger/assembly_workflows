@@ -133,8 +133,6 @@ rule clean_fasta:
     output:
         fasta=temp("Liftoff/tmp/{SM}.fasta"),
         fai=temp("Liftoff/tmp/{SM}.fasta.fai")
-    resources:
-        mem=8
     run:
         tag=input.fasta.strip()[-3:]
         if(tag==".gz"):
@@ -172,13 +170,16 @@ rule run_liftoff:
 		unmapped = "Liftoff/{SM}.unmapped.gff3",
 		temp = directory('Liftoff/temp.{SM}')
 	threads: 32
+	params:
+		extra_gene_copies_limit = 500
 	resources:
 		mem=8,
 	shell:"""
+echo "testing at liftoff."
 liftoff -dir {output.temp} \
         -f <(echo "locus") \
         -flank 0.1 \
-        -n 500 \
+        -mm2_options ="-a --end-bonus 5 --eqx -N {params.extra_gene_copies_limit} -p 0.5" \
         -sc 0.85 -copies -p {threads} \
         -g {input.gff} -o {output.gff} -u {output.unmapped} \
          {input.t} {input.r} \

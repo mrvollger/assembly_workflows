@@ -57,6 +57,14 @@ def get_rgn_fasta(wc):
       o.append(f.format(sm=sm,h=hap,r=rgn))
   return(o)
 
+def get_liftoff_choice(wc):
+    ''' give user option of to generate liftoff results for all haplotypes vs. only simple.fasta result.'''
+    print("config_keys" + str( config.keys()) )
+    if("liftoff_samples" in config.keys()):
+        if(config['liftoff_samples'] == 'all'):
+            return( rules.simple_fasta.output.allfasta )
+    return(rules.simple_fasta.output.fasta)
+
 wildcard_constraints:
   sm="|".join(sms),
   h="|".join(haps),
@@ -400,7 +408,7 @@ snakemake -s {SDIR}/workflows/mask.smk \
 
 rule get_genes:
     input:
-      fasta = rules.simple_fasta.output.fasta,
+      fasta = get_liftoff_choice, #rules.simple_fasta.output.fasta
       bed="temp/GRCh38chrOnly.pri.{r}.bed",
       #ref = REF,
       #gff = GFF,

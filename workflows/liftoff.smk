@@ -175,7 +175,6 @@ rule run_liftoff:
 	resources:
 		mem=8,
 	shell:"""
-echo "testing at liftoff."
 liftoff -dir {output.temp} \
         -f <(echo "locus") \
         -flank 0.1 \

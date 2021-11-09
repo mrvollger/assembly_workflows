@@ -15,9 +15,9 @@ if os.path.exists("Master_SD_freeze.tbl"):
   table = "Master_SD_freeze.tbl"
 df = pd.read_csv(table, sep="\t", comment="#")
 CHM13D="/net/eichler/vol26/projects/chm13_t2t/nobackups"
-REF=os.path.abspath(f"{CHM13D}/assemblies_for_anlysis/unzipped/CHM13.pri.fa")
-FAI=os.path.abspath(f"{CHM13D}/assemblies_for_anlysis/unzipped/CHM13.pri.fa.fai")
-GFF=os.path.abspath(f"{CHM13D}/Assembly_analysis/Liftoff/chm13.draft_v1.0_plus38Y.gff3")
+REF=os.path.abspath(f"{CHM13D}/assemblies/chm13_v1.1_plus38Y.fasta")
+FAI=os.path.abspath(f"{REF}.fai")
+GFF=os.path.abspath(f"{CHM13D}/Assembly_analysis/Liftoff/chm13_v1.1_plus38Y.all.gff3")
 FLANK=50000
 RMFLANK=FLANK-2000
 RMFLANK=0

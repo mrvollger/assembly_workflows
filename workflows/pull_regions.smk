@@ -6,7 +6,11 @@ import pysam
 SDIR=os.path.realpath(os.path.dirname(srcdir("env.cfg"))+"/..")
 shell.prefix(f"source {SDIR}/env.cfg ; set -eo pipefail; ")
 
-table = "Master.tbl"
+if("table" in config.keys()):
+    table = config["table"]
+else:
+    table = "Master.tbl"
+
 if os.path.exists("Master_SD_freeze.tbl"):
   table = "Master_SD_freeze.tbl"
 df = pd.read_csv(table, sep="\t", comment="#")

@@ -465,7 +465,7 @@ rule mg_make_gfa:
       shell("samtools faidx {input.fasta}")
       pairs = { line.split()[0]:int(line.split()[1]) for line in open(input.fasta + ".fai") }
       names = sorted(list(pairs), key = lambda x: pairs[x]) 
-      ordered = []
+      ordered = [None, None]
       for name in names:
         print(name)
         path=f"Minigraph/temp.{wildcards.r}/{name}.fasta"
@@ -480,7 +480,8 @@ rule mg_make_gfa:
         else:
           ordered.append(path)
         shell(f"samtools faidx {input.fasta} {name} > {path}") 
-      shell("""
+        ordered = [i for i in ordered if i != None]
+        shell("""
 cat {ordered} | seqtk seq -l 80 > {output.fasta}
 minigraph -xggs -L 5000 -r 100000 -t {threads} {ordered} > {output.gfa} """)
     

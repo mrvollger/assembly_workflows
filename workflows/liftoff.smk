@@ -178,7 +178,7 @@ rule run_liftoff:
 liftoff -dir {output.temp} \
         -f <(echo "locus") \
         -flank 0.1 \
-        -mm2_options ="-a --end-bonus 5 --eqx -N {params.extra_gene_copies_limit} -p 0.5" \
+        -mm2_options="-a --end-bonus 5 --eqx -N {params.extra_gene_copies_limit} -p 0.5" \
         -sc 0.85 -copies -p {threads} \
         -g {input.gff} -o {output.gff} -u {output.unmapped} \
          {input.t} {input.r} \

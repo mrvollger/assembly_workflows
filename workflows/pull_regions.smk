@@ -467,7 +467,6 @@ rule mg_make_gfa:
       names = sorted(list(pairs), key = lambda x: pairs[x]) 
       ordered = [None, None]
       for name in names:
-        print(name)
         path=f"Minigraph/temp.{wildcards.r}/{name}.fasta"
         if name.startswith("GRCh38chrOnly"):
           ordered.insert(1, path)
@@ -479,9 +478,10 @@ rule mg_make_gfa:
           continue
         else:
           ordered.append(path)
+        shell("mkdir -p Minigraph/temp.{wildcards.r}")
         shell(f"samtools faidx {input.fasta} {name} > {path}") 
-        ordered = [i for i in ordered if i != None]
-        shell("""
+      ordered = [i for i in ordered if i != None]
+      shell("""
 cat {ordered} | seqtk seq -l 80 > {output.fasta}
 minigraph -xggs -L 5000 -r 100000 -t {threads} {ordered} > {output.gfa} """)
     
@@ -563,7 +563,11 @@ rule table:
     for fasta in input.fastas:
       df = pd.read_csv(fasta+".fai", sep="\t", names=["contig", "length", "x","y","z"])
       df[['Region','sm','hap','drop']] = df.contig.str.split("__", expand=True)
-      df[['sm','Species']] = df.sm.str.split("_", expand=True)
+      sm_species_df = df.sm.str.split("_", expand=True)
+      if( sm_species_df.shape[1] < 2 ):
+          sm_species_df['Species'] = None
+      df[['sm','Species']] = sm_species_df
+      df.Species.replace({None:"Human"}, inplace=True) 
       df.Species.replace({None:"Human"}, inplace=True)
       df["fasta"] = os.path.abspath(fasta)
       dfs.append(df)

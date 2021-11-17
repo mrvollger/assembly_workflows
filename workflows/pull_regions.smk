@@ -186,6 +186,7 @@ rule pull_fasta:
   output:
     bed="temp/{sm}.{h}.{r}.bed",
     fasta="temp/{sm}.{h}.{r}.fasta",
+    q_rgn="temp/{sm}.{h}.{r}.rgn"
   params:
     dist=get_dist,
     rgn=get_whole_rgn,
@@ -195,10 +196,11 @@ awk  '{{print $6"\t"$8"\t"$9"\t"$1"_"$6"\t"$3"\t"$4}}' {input.paf} | \
       bedtools slop -i - -g {input.fasta}.fai -b -{RMFLANK} \
       > {output.bed}
 
-# make fasta be in the same orientation as the reference 
+awk '{{print $1":"$2"-"$3}}' {output.bed} > {output.q_rgn}
+
 minimap2 -t {threads} -m 10000 -ax asm20 -r 200000 --eqx -Y \
-  <(samtools faidx {input.ref} {params.rgn})\
-  <(bedtools getfasta -fi {input.fasta} -bed {output.bed}) | \
+  <(samtools faidx {input.ref} {params.rgn}) \
+  <(samtools faidx {input.fasta} -r {output.q_rgn} )| \
   samtools view -F 2308 | \
   awk '{{OFS="\\t"; print ">"$1"\\n"$10}}' - | \
   seqtk seq -l 60 > {output.fasta} 

@@ -57,13 +57,27 @@ def get_rgn_fasta(wc):
       o.append(f.format(sm=sm,h=hap,r=rgn))
   return(o)
 
-def get_liftoff_choice(wc):
-    ''' give user option of to generate liftoff results for all haplotypes vs. only simple.fasta result.'''
+def get_simple_vs_all_choice( cur_cfg_key , choice = 'simple' ):
+    ''' give user option to either run software on all haplotypes or only simple.fasta result : for Liftoff and Minigraph'''
     print("config_keys" + str( config.keys()) )
-    if("liftoff_samples" in config.keys()):
-        if(config['liftoff_samples'] == 'all'):
+    if( cur_cfg_key  in config.keys()):
+        if(config[ cur_cfg_key ] == 'all'):
             return( rules.simple_fasta.output.allfasta )
-    return(rules.simple_fasta.output.fasta)
+    if(choice == 'all' ):
+        return( rules.simple_fasta.output.allfasta )
+    elif(choice == 'simple'):
+        return(rules.simple_fasta.output.fasta)
+    else:
+        print(f"Didn't recognize {choice} choice for config key {cur_cfg_key}. Running {cur_cfg_key} on simple fasta.")
+        return(rules.simple_fasta.output.fasta)
+
+def get_liftoff_sample_choice(wc):
+    ''' give user option of to generate liftoff results for all haplotypes vs. only simple.fasta result.'''
+    return( get_simple_vs_all_choice("liftoff_samples")  )
+
+def get_minigraph_sample_choice(wc):
+    '''give user option to run Minigraph for all haplotypes vs. only simple.fasta result'''
+    return( get_simple_vs_all_choice("minigraph_samples") )
 
 wildcard_constraints:
   sm="|".join(sms),
@@ -410,7 +424,7 @@ snakemake -s {SDIR}/workflows/mask.smk \
 
 rule get_genes:
     input:
-      fasta = get_liftoff_choice, #rules.simple_fasta.output.fasta
+      fasta = get_liftoff_sample_choice, # get_liftoff_choice, #rules.simple_fasta.output.fasta
       bed="temp/GRCh38chrOnly.pri.{r}.bed",
       #ref = REF,
       #gff = GFF,
@@ -457,7 +471,7 @@ rule get_genes:
 
 rule mg_make_gfa:
   input:
-    fasta = rules.simple_fasta.output.fasta,
+    fasta = get_minigraph_sample_choice #rules.simple_fasta.output.fasta,
   output:
     gfa = "Minigraph/{r}.gfa",
     fastas = directory("Minigraph/temp.{r}/"),
@@ -519,7 +533,7 @@ rule mg_parse:
   threads: 1
   shell:"""
 {SDIR}/scripts/GAF_parsing.py \
-    --ref $(cut -f 1 {input.gaf} | grep "CHM13.pri" | head -n 1 ) \
+    --ref $(cut -f 1 {input.gaf} | grep "CHM13__pri" | head -n 1 ) \
     {input.gaf} > {output.tbl}
 {SDIR}/scripts/make_csv_from_gfa.sh {input.gfa} > {output.csv}
 """

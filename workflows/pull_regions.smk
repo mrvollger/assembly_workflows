@@ -6,14 +6,18 @@ import pysam
 SDIR=os.path.realpath(os.path.dirname(srcdir("env.cfg"))+"/..")
 shell.prefix(f"source {SDIR}/env.cfg ; set -eo pipefail; ")
 
-table = "Master.tbl"
+if("table" in config.keys()):
+    table = config["table"]
+else:
+    table = "Master.tbl"
+
 if os.path.exists("Master_SD_freeze.tbl"):
   table = "Master_SD_freeze.tbl"
 df = pd.read_csv(table, sep="\t", comment="#")
 CHM13D="/net/eichler/vol26/projects/chm13_t2t/nobackups"
-REF=os.path.abspath(f"{CHM13D}/assemblies_for_anlysis/unzipped/CHM13.pri.fa")
-FAI=os.path.abspath(f"{CHM13D}/assemblies_for_anlysis/unzipped/CHM13.pri.fa.fai")
-GFF=os.path.abspath(f"{CHM13D}/Assembly_analysis/Liftoff/chm13.draft_v1.0_plus38Y.gff3")
+REF=os.path.abspath(f"{CHM13D}/assemblies/chm13_v1.1_plus38Y.fasta")
+FAI=os.path.abspath(f"{REF}.fai")
+GFF=os.path.abspath(f"{CHM13D}/Assembly_analysis/Liftoff/chm13_v1.1_plus38Y.all.gff3")
 FLANK=50000
 RMFLANK=FLANK-2000
 RMFLANK=0
@@ -52,6 +56,28 @@ def get_rgn_fasta(wc):
       rgn=wc.r
       o.append(f.format(sm=sm,h=hap,r=rgn))
   return(o)
+
+def get_simple_vs_all_choice( cur_cfg_key , choice = 'simple' ):
+    ''' give user option to either run software on all haplotypes or only simple.fasta result : for Liftoff and Minigraph'''
+    print("config_keys" + str( config.keys()) )
+    if( cur_cfg_key  in config.keys()):
+        if(config[ cur_cfg_key ] == 'all'):
+            return( rules.simple_fasta.output.allfasta )
+    if(choice == 'all' ):
+        return( rules.simple_fasta.output.allfasta )
+    elif(choice == 'simple'):
+        return(rules.simple_fasta.output.fasta)
+    else:
+        print(f"Didn't recognize {choice} choice for config key {cur_cfg_key}. Running {cur_cfg_key} on simple fasta.")
+        return(rules.simple_fasta.output.fasta)
+
+def get_liftoff_sample_choice(wc):
+    ''' give user option of to generate liftoff results for all haplotypes vs. only simple.fasta result.'''
+    return( get_simple_vs_all_choice("liftoff_samples")  )
+
+def get_minigraph_sample_choice(wc):
+    '''give user option to run Minigraph for all haplotypes vs. only simple.fasta result'''
+    return( get_simple_vs_all_choice("minigraph_samples") )
 
 wildcard_constraints:
   sm="|".join(sms),
@@ -174,6 +200,7 @@ rule pull_fasta:
   output:
     bed="temp/{sm}.{h}.{r}.bed",
     fasta="temp/{sm}.{h}.{r}.fasta",
+    q_rgn="temp/{sm}.{h}.{r}.rgn"
   params:
     dist=get_dist,
     rgn=get_whole_rgn,
@@ -183,10 +210,11 @@ awk  '{{print $6"\t"$8"\t"$9"\t"$1"_"$6"\t"$3"\t"$4}}' {input.paf} | \
       bedtools slop -i - -g {input.fasta}.fai -b -{RMFLANK} \
       > {output.bed}
 
-# make fasta be in the same orientation as the reference 
+awk '{{print $1":"$2"-"$3}}' {output.bed} > {output.q_rgn}
+
 minimap2 -t {threads} -m 10000 -ax asm20 -r 200000 --eqx -Y \
-  <(samtools faidx {input.ref} {params.rgn})\
-  <(bedtools getfasta -fi {input.fasta} -bed {output.bed}) | \
+  <(samtools faidx {input.ref} {params.rgn}) \
+  <(samtools faidx {input.fasta} -r {output.q_rgn} )| \
   samtools view -F 2308 | \
   awk '{{OFS="\\t"; print ">"$1"\\n"$10}}' - | \
   seqtk seq -l 60 > {output.fasta} 
@@ -396,7 +424,7 @@ snakemake -s {SDIR}/workflows/mask.smk \
 
 rule get_genes:
     input:
-      fasta = rules.simple_fasta.output.fasta,
+      fasta = get_liftoff_sample_choice, # get_liftoff_choice, #rules.simple_fasta.output.fasta
       bed="temp/GRCh38chrOnly.pri.{r}.bed",
       #ref = REF,
       #gff = GFF,
@@ -443,7 +471,7 @@ rule get_genes:
 
 rule mg_make_gfa:
   input:
-    fasta = rules.simple_fasta.output.fasta,
+    fasta = get_minigraph_sample_choice #rules.simple_fasta.output.fasta,
   output:
     gfa = "Minigraph/{r}.gfa",
     fastas = directory("Minigraph/temp.{r}/"),
@@ -453,9 +481,8 @@ rule mg_make_gfa:
       shell("samtools faidx {input.fasta}")
       pairs = { line.split()[0]:int(line.split()[1]) for line in open(input.fasta + ".fai") }
       names = sorted(list(pairs), key = lambda x: pairs[x]) 
-      ordered = []
+      ordered = [None, None]
       for name in names:
-        print(name)
         path=f"Minigraph/temp.{wildcards.r}/{name}.fasta"
         if name.startswith("GRCh38chrOnly"):
           ordered.insert(1, path)
@@ -467,7 +494,9 @@ rule mg_make_gfa:
           continue
         else:
           ordered.append(path)
+        shell("mkdir -p Minigraph/temp.{wildcards.r}")
         shell(f"samtools faidx {input.fasta} {name} > {path}") 
+      ordered = [i for i in ordered if i != None]
       shell("""
 cat {ordered} | seqtk seq -l 80 > {output.fasta}
 minigraph -xggs -L 5000 -r 100000 -t {threads} {ordered} > {output.gfa} """)
@@ -504,7 +533,7 @@ rule mg_parse:
   threads: 1
   shell:"""
 {SDIR}/scripts/GAF_parsing.py \
-    --ref $(cut -f 1 {input.gaf} | grep "CHM13.pri" | head -n 1 ) \
+    --ref $(cut -f 1 {input.gaf} | egrep "CHM13.pri || CHM13__pri" | head -n 1 ) \
     {input.gaf} > {output.tbl}
 {SDIR}/scripts/make_csv_from_gfa.sh {input.gfa} > {output.csv}
 """
@@ -550,7 +579,11 @@ rule table:
     for fasta in input.fastas:
       df = pd.read_csv(fasta+".fai", sep="\t", names=["contig", "length", "x","y","z"])
       df[['Region','sm','hap','drop']] = df.contig.str.split("__", expand=True)
-      df[['sm','Species']] = df.sm.str.split("_", expand=True)
+      sm_species_df = df.sm.str.split("_", expand=True)
+      if( sm_species_df.shape[1] < 2 ):
+          sm_species_df['Species'] = None
+      df[['sm','Species']] = sm_species_df
+      df.Species.replace({None:"Human"}, inplace=True) 
       df.Species.replace({None:"Human"}, inplace=True)
       df["fasta"] = os.path.abspath(fasta)
       dfs.append(df)

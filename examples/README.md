@@ -17,7 +17,9 @@ snakemake --configfile lift.yaml -s ../workflows/liftoff.smk -j 130 -p liftoff
 ## 6 samples
 #  using liftoff command to apply liftOff to ALL samples
 ```
-snakemake -s ../workflows/pull_regions.smk --config liftoff_samples=all table=../test_data/test_Master.tbl -j 32
+
+snakemake -s {path_to_assembly_workflows}/assembly_workflows/workflows/pull_regions.smk minigraph --config minigraph_samples=all liftoff_samples=all table=test_Master.tbl -p -j 32
+
 
 ```
 

@@ -533,7 +533,7 @@ rule mg_parse:
   threads: 1
   shell:"""
 {SDIR}/scripts/GAF_parsing.py \
-    --ref $(cut -f 1 {input.gaf} | grep "CHM13__pri" | head -n 1 ) \
+    --ref $(cut -f 1 {input.gaf} | egrep "CHM13.pri || CHM13__pri" | head -n 1 ) \
     {input.gaf} > {output.tbl}
 {SDIR}/scripts/make_csv_from_gfa.sh {input.gfa} > {output.csv}
 """

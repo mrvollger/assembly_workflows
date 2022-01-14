@@ -128,7 +128,9 @@ rule get_rgns:
     threads: 8
     run:
         shell("samtools faidx {input.ref} {params.rgns} > {output.ref}")
-        if INFER:
+        if(params["rc"]):
+            shell("samtools faidx {input.query} {params.qrgns} | seqtk seq -r - > {output.query}")
+        elif INFER:
             shell(
                 """
         minimap2 -t {threads} -ax asm20 -r 200000 --eqx -Y \
@@ -144,10 +146,6 @@ rule get_rgns:
         shell("samtools faidx {output.ref}")
 
 
-# if(params["rc"]):
-# 			shell("samtools faidx {input.query} {params.qrgns} | seqtk seq -r - > {output.query}")
-# 		else:
-# 			shell("samtools faidx {input.query} {params.qrgns} > {output.query}")
 
 
 rule RepeatMasker:

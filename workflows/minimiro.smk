@@ -22,6 +22,7 @@ GENES = config.pop("genes", True)
 GREP = config.pop("grep", ".")
 SECONDARY = config.pop("secondary", "yes")
 INFER = config.pop("infer", True)
+MAX_INDEL = config.pop("max_indel", 1e6)
 SMS = list(config.keys())
 print(SMS)
 
@@ -69,7 +70,10 @@ wildcard_constraints:
     SCORE="\d+",
 
 
-localrules: DupMaskerColor, get_ref_genes, all
+localrules:
+    DupMaskerColor,
+    get_ref_genes,
+    all,
 
 
 rule all:
@@ -131,12 +135,14 @@ rule get_rgns:
         rc=get_rc,
     threads: 8
     resources:
-        mem = 4,
-        hrs = 24,
+        mem=4,
+        hrs=24,
     run:
         shell("samtools faidx {input.ref} {params.rgns} > {output.ref}")
-        if(params["rc"]):
-            shell('''samtools faidx {input.query} {params.qrgns} | seqtk seq -r - | awk '{{if (NR == 1) print ">{wildcards.SM}"; else print}}' > {output.query}''')
+        if params["rc"]:
+            shell(
+                """samtools faidx {input.query} {params.qrgns} | seqtk seq -r - | awk '{{if (NR == 1) print ">{wildcards.SM}"; else print}}' > {output.query}"""
+            )
         elif INFER:
             shell(
                 """
@@ -144,15 +150,15 @@ rule get_rgns:
             {output.ref} <(samtools faidx {input.query} {params.qrgns}) | \
             samtools view -F 2304 | \
             awk '{{OFS="\\t"; print ">{SM}_{SEQ}""\\n"$10}}' - | \
-            seqtk seq -l 60 > {output.query} """
+        seqtk seq -l 60 > {output.query} """
             )
         else:
-            shell('''samtools faidx {input.query} {params.qrgns} | awk '{{if (NR == 1) print ">{wildcards.SM}"; else print}}' > {output.query}''')
+            shell(
+                """samtools faidx {input.query} {params.qrgns} | awk '{{if (NR == 1) print ">{wildcards.SM}"; else print}}' > {output.query}"""
+            )
 
         shell("samtools faidx {output.query}")
         shell("samtools faidx {output.ref}")
-
-
 
 
 rule RepeatMasker:
@@ -187,7 +193,7 @@ rule DupMasker:
     threads: MAXT
     resources:
         mem=8,
-        hrs=24,   
+        hrs=24,
     shell:
         """
         samtools faidx {input.fasta}
@@ -243,8 +249,8 @@ rule clean_gff:
         bed=get_ref_bed,
     threads: 8
     resources:
-        mem = 4,
-        hrs = 24,
+        mem=4,
+        hrs=24,
     run:
         if not GENES:
             shell("touch {output}")
@@ -332,8 +338,8 @@ rule liftoff_genes:
         bed=get_ref_bed,
     threads: 8
     resources:
-        mem = 4,
-        hrs = 24,
+        mem=4,
+        hrs=24,
     run:
         if not GENES:
             shell("touch {output}")
@@ -373,14 +379,17 @@ rule minimap2:
         score=get_score,
     threads: 16
     resources:
-        mem = 4,
-        hrs = 24, 
+        mem=4,
+        hrs=24,
     shell:
         """
         # YOU HAVE TO INCLUDE --cs FOR MINIMIRO TO WORK
-        minimap2 -x asm20 -r 200000 -s {params.score} \
-                   -p 0.01 -N 1000 --secondary={SECONDARY}\
-                   --cs {input.ref} {input.query} > {output.paf}
+        minimap2 -x asm20 --eqx -s {params.score} \
+                   -p 0.01 -N 1000 --secondary={SECONDARY} \
+                   --cs \
+                   {input.ref} {input.query} 
+            | rb break-paf --max-size {MAX_INDEL} \
+            > {output.paf}
         """
 
 
@@ -406,8 +415,8 @@ rule minimiro:
         pdf="miro_figures/{SM}_{SCORE}_aln.pdf",
     threads: 1
     resources:
-        mem = 16,
-        hrs = 24,
+        mem=16,
+        hrs=24,
     shell:
         """
         {SDIR}/scripts/minimiro.py --paf {input.paf} \
@@ -435,8 +444,8 @@ rule coverage:
         rgn=get_query_rgns,
     threads: 1
     resources:
-        mem = 8,
-        hrs = 24,
+        mem=8,
+        hrs=24,
     shell:
         """
         NucPlot.py {input.bam} {output.png} --regions {params.rgn} --height 4 --width 16

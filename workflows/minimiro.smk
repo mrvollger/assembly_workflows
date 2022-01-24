@@ -149,7 +149,7 @@ rule get_rgns:
         minimap2 -t {threads} -ax asm20 -r 200000 --eqx -Y \
             {output.ref} <(samtools faidx {input.query} {params.qrgns}) | \
             samtools view -F 2304 | \
-            awk '{{OFS="\\t"; print ">{SM}_{SEQ}""\\n"$10}}' - | \
+            awk '{{OFS="\\t"; print ">{wildcards.SM}""\\n"$10}}' - | \
         seqtk seq -l 60 > {output.query} """
             )
         else:
@@ -383,11 +383,10 @@ rule minimap2:
         hrs=24,
     shell:
         """
-        # YOU HAVE TO INCLUDE --cs FOR MINIMIRO TO WORK
-        minimap2 -x asm20 --eqx -s {params.score} \
+        # YOU HAVE TO INCLUDE --eqx FOR MINIMIRO TO WORK
+        minimap2 -x asm20 -c --eqx -s {params.score} \
                    -p 0.01 -N 1000 --secondary={SECONDARY} \
-                   --cs \
-                   {input.ref} {input.query} 
+                   {input.ref} {input.query} \
             | rb break-paf --max-size {MAX_INDEL} \
             > {output.paf}
         """

@@ -7,7 +7,7 @@ genes: False # if you set this to True out must include a gff compatible with li
 simple: False # if this value is set to true the code will only make the duplicon tracks and none of the other minimiro output (good when there is lot of sequences).
 infer: True # Try to infer the orientation of the query sequences that will have the majority of sequence in the same direction.
 secondary: "no" # Set to "yes" to allow minimap2 to make secondary alignments.
-max_indel: 500 # Indels above this size (5000) or greater in a PAF alignment will cause the alignment to be split into two separate alignments.
+max_indel: 50 # Indels above this size (50) or greater in a PAF alignment will cause the alignment to be split into two separate alignments.
 
 example_prefix: # a name which will prefix the outputs (can be anything without spaces)
   ref: ref.fa

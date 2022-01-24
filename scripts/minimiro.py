@@ -189,11 +189,12 @@ if(args.paf):
 	
 	#print(paf) 
 	for idx, row in paf.iterrows():
-		cs = re.match("cs:Z:(\S+)", row["cs"])
-		assert cs, "Must have cs string, line {}".format(idx+1)
-		cs = parse_cs( cs.groups()[0] )
-		segs += high_scoring_segs(row, cs, row["q_ctg"], row["q_len"] )
-		#segs += high_scoring_segs(hit, cs, name, qlen )
+            #cs = re.match("cs:Z:(\S+)", row["cs"])
+            #assert cs, "Must have cs string, line {}".format(idx+1)
+            #cs = parse_cs( cs.groups()[0] )
+            cs = None
+            segs += high_scoring_segs(row, cs, row["q_ctg"], row["q_len"] )
+            #segs += high_scoring_segs(hit, cs, name, qlen )
 
 elif(args.r):
 	#

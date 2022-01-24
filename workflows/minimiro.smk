@@ -10,7 +10,7 @@ configfile: "minimiro.yaml"
 
 # SDIR=os.path.dirname(workflow.snakefile)
 SDIR = os.path.realpath(os.path.dirname(srcdir("env.cfg")) + "/..")
-MAXT = 24
+MAXT = 16
 DEBUG = True
 
 shell.prefix(f"source {SDIR}/env.cfg ; set -eo pipefail; ")
@@ -42,6 +42,7 @@ for SM in SMS:
     assert os.path.exists(RS[SM] + ".fai")
     RGNS[SM] = config[SM]["regions"]  # region(s) to pull from reference
     QS[SM] = os.path.abspath(config[SM]["query"])  # query sequence
+    print(QS[SM])
     assert os.path.exists(QS[SM] + ".fai")
     QRGNS[SM] = config[SM]["queryregions"]  # region(s) to pull from query
     if "rc" in config[SM]:
@@ -66,6 +67,9 @@ wildcard_constraints:
     SEQ="|".join(SEQS),
     SM="|".join(SMS),
     SCORE="\d+",
+
+
+localrules: DupMaskerColor, get_ref_genes, all
 
 
 rule all:
@@ -126,21 +130,24 @@ rule get_rgns:
         qrgns=get_query_rgns,
         rc=get_rc,
     threads: 8
+    resources:
+        mem = 4,
+        hrs = 24,
     run:
         shell("samtools faidx {input.ref} {params.rgns} > {output.ref}")
         if(params["rc"]):
-            shell("samtools faidx {input.query} {params.qrgns} | seqtk seq -r - > {output.query}")
+            shell('''samtools faidx {input.query} {params.qrgns} | seqtk seq -r - | awk '{{if (NR == 1) print ">{wildcards.SM}"; else print}}' > {output.query}''')
         elif INFER:
             shell(
                 """
         minimap2 -t {threads} -ax asm20 -r 200000 --eqx -Y \
             {output.ref} <(samtools faidx {input.query} {params.qrgns}) | \
             samtools view -F 2304 | \
-            awk '{{OFS="\\t"; print ">"$1"\\n"$10}}' - | \
-        seqtk seq -l 60 > {output.query} """
+            awk '{{OFS="\\t"; print ">{SM}_{SEQ}""\\n"$10}}' - | \
+            seqtk seq -l 60 > {output.query} """
             )
         else:
-            shell("samtools faidx {input.query} {params.qrgns} > {output.query}")
+            shell('''samtools faidx {input.query} {params.qrgns} | awk '{{if (NR == 1) print ">{wildcards.SM}"; else print}}' > {output.query}''')
 
         shell("samtools faidx {output.query}")
         shell("samtools faidx {output.ref}")
@@ -158,6 +165,7 @@ rule RepeatMasker:
         out=tempd("temp_minimiro/{SM}_{SEQ}.fasta.out"),
     resources:
         mem=8,
+        hrs=24,
     threads: MAXT
     shell:
         """
@@ -177,6 +185,9 @@ rule DupMasker:
     output:
         dups="temp_minimiro/{SM}_{SEQ}.fasta.duplicons",
     threads: MAXT
+    resources:
+        mem=8,
+        hrs=24,   
     shell:
         """
         samtools faidx {input.fasta}
@@ -231,6 +242,9 @@ rule clean_gff:
     params:
         bed=get_ref_bed,
     threads: 8
+    resources:
+        mem = 4,
+        hrs = 24,
     run:
         if not GENES:
             shell("touch {output}")
@@ -317,6 +331,9 @@ rule liftoff_genes:
     params:
         bed=get_ref_bed,
     threads: 8
+    resources:
+        mem = 4,
+        hrs = 24,
     run:
         if not GENES:
             shell("touch {output}")
@@ -355,6 +372,9 @@ rule minimap2:
     params:
         score=get_score,
     threads: 16
+    resources:
+        mem = 4,
+        hrs = 24, 
     shell:
         """
         # YOU HAVE TO INCLUDE --cs FOR MINIMIRO TO WORK
@@ -385,6 +405,9 @@ rule minimiro:
         ps="temp_minimiro/{SM}_{SCORE}_aln.ps",
         pdf="miro_figures/{SM}_{SCORE}_aln.pdf",
     threads: 1
+    resources:
+        mem = 16,
+        hrs = 24,
     shell:
         """
         {SDIR}/scripts/minimiro.py --paf {input.paf} \
@@ -411,6 +434,9 @@ rule coverage:
     params:
         rgn=get_query_rgns,
     threads: 1
+    resources:
+        mem = 8,
+        hrs = 24,
     shell:
         """
         NucPlot.py {input.bam} {output.png} --regions {params.rgn} --height 4 --width 16

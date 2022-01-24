@@ -30,3 +30,5 @@ snakemake --config fasta=/path/to/fasta/or/assembly/something.fasta sample=SomeS
 ```
 
 A minimal example of how to include can be found in `workflows/run.smk`.
+
+hello

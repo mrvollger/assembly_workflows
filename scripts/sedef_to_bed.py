@@ -24,6 +24,8 @@ def is_acro(sedef, cens):
     acros = ["chr13", "chr14", "chr15", "chr21", "chr22"]
     acro = pd.DataFrame({"chr":cens.chr, "start":0, "end":cens.end})
     acro = acro[acro.chr.isin(acros)]  
+    if acro.shape[0] == 0:
+        return 0
     return bb.df_df_intersect(acro, sedef)
 
 def get_color(frac_id):
